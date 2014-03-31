@@ -32,16 +32,23 @@
 #include "EventThread.h"
 #include "SurfaceFlinger.h"
 
+#ifndef MTK_DEFAULT_AOSP
+// reserve client pid infomation
+#include <binder/IPCThreadState.h>
+#include <cutils/xlog.h>
+#endif
+
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
 
-EventThread::EventThread(const sp<SurfaceFlinger>& flinger)
-    : mFlinger(flinger),
+EventThread::EventThread(const sp<VSyncSource>& src)
+    : mVSyncSource(src),
       mUseSoftwareVSync(false),
+      mVsyncEnabled(false),
       mDebugVsyncEnabled(false) {
 
-    for (int32_t i=0 ; i<HWC_NUM_DISPLAY_TYPES ; i++) {
+    for (int32_t i=0 ; i<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES ; i++) {
         mVSyncEvent[i].header.type = DisplayEventReceiver::DISPLAY_EVENT_VSYNC;
         mVSyncEvent[i].header.id = 0;
         mVSyncEvent[i].header.timestamp = 0;
@@ -110,27 +117,21 @@ void EventThread::onScreenAcquired() {
     }
 }
 
-
-void EventThread::onVSyncReceived(int type, nsecs_t timestamp) {
-    ALOGE_IF(type >= HWC_NUM_DISPLAY_TYPES,
-            "received vsync event for an invalid display (id=%d)", type);
-
+void EventThread::onVSyncEvent(nsecs_t timestamp) {
     Mutex::Autolock _l(mLock);
-    if (type < HWC_NUM_DISPLAY_TYPES) {
-        mVSyncEvent[type].header.type = DisplayEventReceiver::DISPLAY_EVENT_VSYNC;
-        mVSyncEvent[type].header.id = type;
-        mVSyncEvent[type].header.timestamp = timestamp;
-        mVSyncEvent[type].vsync.count++;
-        mCondition.broadcast();
-    }
+    mVSyncEvent[0].header.type = DisplayEventReceiver::DISPLAY_EVENT_VSYNC;
+    mVSyncEvent[0].header.id = 0;
+    mVSyncEvent[0].header.timestamp = timestamp;
+    mVSyncEvent[0].vsync.count++;
+    mCondition.broadcast();
 }
 
 void EventThread::onHotplugReceived(int type, bool connected) {
-    ALOGE_IF(type >= HWC_NUM_DISPLAY_TYPES,
+    ALOGE_IF(type >= DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES,
             "received hotplug event for an invalid display (id=%d)", type);
 
     Mutex::Autolock _l(mLock);
-    if (type < HWC_NUM_DISPLAY_TYPES) {
+    if (type < DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES) {
         DisplayEventReceiver::Event event;
         event.header.type = DisplayEventReceiver::DISPLAY_EVENT_HOTPLUG;
         event.header.id = type;
@@ -184,7 +185,7 @@ Vector< sp<EventThread::Connection> > EventThread::waitForEvent(
 
         size_t vsyncCount = 0;
         nsecs_t timestamp = 0;
-        for (int32_t i=0 ; i<HWC_NUM_DISPLAY_TYPES ; i++) {
+        for (int32_t i=0 ; i<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES ; i++) {
             timestamp = mVSyncEvent[i].header.timestamp;
             if (timestamp) {
                 // we have a vsync event to dispatch
@@ -285,7 +286,7 @@ Vector< sp<EventThread::Connection> > EventThread::waitForEvent(
                     // FIXME: how do we decide which display id the fake
                     // vsync came from ?
                     mVSyncEvent[0].header.type = DisplayEventReceiver::DISPLAY_EVENT_VSYNC;
-                    mVSyncEvent[0].header.id = HWC_DISPLAY_PRIMARY;
+                    mVSyncEvent[0].header.id = DisplayDevice::DISPLAY_PRIMARY;
                     mVSyncEvent[0].header.timestamp = systemTime(SYSTEM_TIME_MONOTONIC);
                     mVSyncEvent[0].vsync.count++;
                 }
@@ -308,19 +309,26 @@ Vector< sp<EventThread::Connection> > EventThread::waitForEvent(
 void EventThread::enableVSyncLocked() {
     if (!mUseSoftwareVSync) {
         // never enable h/w VSYNC when screen is off
-        mFlinger->eventControl(HWC_DISPLAY_PRIMARY, SurfaceFlinger::EVENT_VSYNC, true);
-        mPowerHAL.vsyncHint(true);
+        if (!mVsyncEnabled) {
+            mVsyncEnabled = true;
+            mVSyncSource->setCallback(static_cast<VSyncSource::Callback*>(this));
+            mVSyncSource->setVSyncEnabled(true);
+            mPowerHAL.vsyncHint(true);
+        }
     }
     mDebugVsyncEnabled = true;
 }
 
 void EventThread::disableVSyncLocked() {
-    mFlinger->eventControl(HWC_DISPLAY_PRIMARY, SurfaceFlinger::EVENT_VSYNC, false);
-    mPowerHAL.vsyncHint(false);
-    mDebugVsyncEnabled = false;
+    if (mVsyncEnabled) {
+        mVsyncEnabled = false;
+        mVSyncSource->setVSyncEnabled(false);
+        mPowerHAL.vsyncHint(false);
+        mDebugVsyncEnabled = false;
+    }
 }
 
-void EventThread::dump(String8& result, char* buffer, size_t SIZE) const {
+void EventThread::dump(String8& result) const {
     Mutex::Autolock _l(mLock);
     result.appendFormat("VSYNC state: %s\n",
             mDebugVsyncEnabled?"enabled":"disabled");
@@ -328,7 +336,7 @@ void EventThread::dump(String8& result, char* buffer, size_t SIZE) const {
             mUseSoftwareVSync?"enabled":"disabled");
     result.appendFormat("  numListeners=%u,\n  events-delivered: %u\n",
             mDisplayEventConnections.size(),
-            mVSyncEvent[HWC_DISPLAY_PRIMARY].vsync.count);
+            mVSyncEvent[DisplayDevice::DISPLAY_PRIMARY].vsync.count);
     for (size_t i=0 ; i<mDisplayEventConnections.size() ; i++) {
         sp<Connection> connection =
                 mDisplayEventConnections.itemAt(i).promote();
@@ -343,11 +351,21 @@ EventThread::Connection::Connection(
         const sp<EventThread>& eventThread)
     : count(-1), mEventThread(eventThread), mChannel(new BitTube())
 {
+#ifndef MTK_DEFAULT_AOSP
+    // reserve client pid infomation
+    pid = IPCThreadState::self()->getCallingPid();
+    XLOGI("EventThread Client Pid (%d) created", pid);
+#endif
 }
 
 EventThread::Connection::~Connection() {
     // do nothing here -- clean-up will happen automatically
     // when the main thread wakes up
+
+#ifndef MTK_DEFAULT_AOSP
+    // reserve client pid infomation
+    XLOGI("EventThread Client Pid (%d) disconnected by (%d)", pid, getpid());
+#endif
 }
 
 void EventThread::Connection::onFirstRef() {
@@ -360,15 +378,33 @@ sp<BitTube> EventThread::Connection::getDataChannel() const {
 }
 
 void EventThread::Connection::setVsyncRate(uint32_t count) {
+#ifndef MTK_DEFAULT_AOSP
+#ifndef MTK_USER_BUILD
+    XLOGD("setVsyncRate(%d, c=%d)", pid, count);
+#endif
+#endif
     mEventThread->setVsyncRate(count, this);
 }
 
 void EventThread::Connection::requestNextVsync() {
+#ifndef MTK_DEFAULT_AOSP
+#ifndef MTK_USER_BUILD
+    XLOGD("requestNextVsync(%d)", pid);
+#endif
+#endif
     mEventThread->requestNextVsync(this);
 }
 
 status_t EventThread::Connection::postEvent(
         const DisplayEventReceiver::Event& event) {
+#ifndef MTK_DEFAULT_AOSP
+#ifndef MTK_USER_BUILD
+    if (event.header.type == DisplayEventReceiver::DISPLAY_EVENT_VSYNC)
+        XLOGD("postEvent(%d, v/c=%d)", pid, event.vsync.count);
+    else
+        XLOGD("postEvent(%d)", pid);
+#endif
+#endif
     ssize_t size = DisplayEventReceiver::sendEvents(mChannel, &event, 1);
     return size < 0 ? status_t(size) : status_t(NO_ERROR);
 }

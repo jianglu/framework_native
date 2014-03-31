@@ -29,6 +29,10 @@
 
 #include <hardware/gralloc.h>
 
+#ifndef MTK_DEFAULT_AOSP
+#include <cutils/properties.h>
+#include <utils/CallStack.h>
+#endif
 
 namespace android {
 // ---------------------------------------------------------------------------
@@ -44,10 +48,26 @@ GraphicBufferMapper::GraphicBufferMapper()
     if (err == 0) {
         mAllocMod = (gralloc_module_t const *)module;
     }
+
+#ifndef MTK_DEFAULT_AOSP
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.gbuf.callstack", value, "0");
+    mIsDumpCallStack = atoi(value);
+    if (true == mIsDumpCallStack) {
+        ALOGI("!!! dump GraphicBufferMapper callstack for pid:%d !!!", getpid());
+    }
+#endif
 }
 
 status_t GraphicBufferMapper::registerBuffer(buffer_handle_t handle)
 {
+#ifndef MTK_DEFAULT_AOSP
+    if (true == mIsDumpCallStack) {
+        ALOGD("[GraphicBufferMapper::registerBuffer] handle:%p", handle);
+        CallStack stack("    ");
+    }    
+#endif
+
     ATRACE_CALL();
     status_t err;
 
@@ -60,6 +80,13 @@ status_t GraphicBufferMapper::registerBuffer(buffer_handle_t handle)
 
 status_t GraphicBufferMapper::unregisterBuffer(buffer_handle_t handle)
 {
+#ifndef MTK_DEFAULT_AOSP
+    if (true == mIsDumpCallStack) {
+        ALOGD("[GraphicBufferMapper::unregisterBuffer] handle:%p", handle);
+        CallStack stack("    ");
+    }    
+#endif
+
     ATRACE_CALL();
     status_t err;
 

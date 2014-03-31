@@ -57,6 +57,11 @@ private:
     friend class Singleton<GraphicBufferMapper>;
     GraphicBufferMapper();
     gralloc_module_t const *mAllocMod;
+
+#ifndef MTK_DEFAULT_AOSP
+private:
+    bool mIsDumpCallStack;
+#endif
 };
 
 // ---------------------------------------------------------------------------

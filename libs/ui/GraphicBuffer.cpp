@@ -36,8 +36,7 @@ namespace android {
 
 GraphicBuffer::GraphicBuffer()
     : BASE(), mOwner(ownData), mBufferMapper(GraphicBufferMapper::get()),
-      mInitCheck(NO_ERROR), mIndex(-1)
-{
+      mInitCheck(NO_ERROR) {
     width  = 
     height = 
     stride = 
@@ -49,7 +48,7 @@ GraphicBuffer::GraphicBuffer()
 GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h, 
         PixelFormat reqFormat, uint32_t reqUsage)
     : BASE(), mOwner(ownData), mBufferMapper(GraphicBufferMapper::get()),
-      mInitCheck(NO_ERROR), mIndex(-1)
+      mInitCheck(NO_ERROR)
 {
     width  = 
     height = 
@@ -65,7 +64,7 @@ GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
         uint32_t inStride, native_handle_t* inHandle, bool keepOwnership)
     : BASE(), mOwner(keepOwnership ? ownHandle : ownNone),
       mBufferMapper(GraphicBufferMapper::get()),
-      mInitCheck(NO_ERROR), mIndex(-1)
+      mInitCheck(NO_ERROR)
 {
     width  = w;
     height = h;
@@ -73,12 +72,17 @@ GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
     format = inFormat;
     usage  = inUsage;
     handle = inHandle;
+
+#ifndef MTK_DEFAULT_AOSP
+    ALOGI("create GraphicBuffer by existing handle (w:%d h%d f:%d) owner(%d)",
+          stride, height, format, mOwner);
+#endif
 }
 
 GraphicBuffer::GraphicBuffer(ANativeWindowBuffer* buffer, bool keepOwnership)
     : BASE(), mOwner(keepOwnership ? ownHandle : ownNone),
       mBufferMapper(GraphicBufferMapper::get()),
-      mInitCheck(NO_ERROR), mIndex(-1), mWrappedBuffer(buffer)
+      mInitCheck(NO_ERROR), mWrappedBuffer(buffer)
 {
     width  = buffer->width;
     height = buffer->height;
@@ -86,6 +90,11 @@ GraphicBuffer::GraphicBuffer(ANativeWindowBuffer* buffer, bool keepOwnership)
     format = buffer->format;
     usage  = buffer->usage;
     handle = buffer->handle;
+
+#ifndef MTK_DEFAULT_AOSP
+    ALOGI("create GraphicBuffer by existing native window buffer (w:%d h%d f:%d) owner(%d)",
+          stride, height, format, mOwner);
+#endif
 }
 
 GraphicBuffer::~GraphicBuffer()
@@ -98,10 +107,18 @@ GraphicBuffer::~GraphicBuffer()
 void GraphicBuffer::free_handle()
 {
     if (mOwner == ownHandle) {
+#ifndef MTK_DEFAULT_AOSP
+        ALOGD("close handle(%p) (w:%d h:%d f:%d)",
+            handle, stride, height, format);
+#endif
         mBufferMapper.unregisterBuffer(handle);
         native_handle_close(handle);
         native_handle_delete(const_cast<native_handle*>(handle));
     } else if (mOwner == ownData) {
+#ifndef MTK_DEFAULT_AOSP
+        ALOGI("free buffer (w:%d h:%d f:%d) handle(%p)",
+            stride, height, format, handle);
+#endif
         GraphicBufferAllocator& allocator(GraphicBufferAllocator::get());
         allocator.free(handle);
     }
@@ -145,6 +162,12 @@ status_t GraphicBuffer::initSize(uint32_t w, uint32_t h, PixelFormat format,
 {
     GraphicBufferAllocator& allocator = GraphicBufferAllocator::get();
     status_t err = allocator.alloc(w, h, format, reqUsage, &handle, &stride);
+    
+#ifndef MTK_DEFAULT_AOSP
+    ALOGI("allocate buffer (w:%d h:%d f:%d) handle(%p) err(%d)",
+        stride, h, format, handle, err);
+#endif
+
     if (err == NO_ERROR) {
         this->width  = w;
         this->height = h;
@@ -209,9 +232,7 @@ size_t GraphicBuffer::getFdCount() const {
     return handle ? handle->numFds : 0;
 }
 
-status_t GraphicBuffer::flatten(void* buffer, size_t size,
-        int fds[], size_t count) const
-{
+status_t GraphicBuffer::flatten(void*& buffer, size_t& size, int*& fds, size_t& count) const {
     size_t sizeNeeded = GraphicBuffer::getFlattenedSize();
     if (size < sizeNeeded) return NO_MEMORY;
 
@@ -236,12 +257,16 @@ status_t GraphicBuffer::flatten(void* buffer, size_t size,
         memcpy(&buf[8], h->data + h->numFds, h->numInts*sizeof(int));
     }
 
+    buffer = reinterpret_cast<void*>(static_cast<int*>(buffer) + sizeNeeded);
+    size -= sizeNeeded;
+    fds += handle->numFds;
+    count -= handle->numFds;
+
     return NO_ERROR;
 }
 
-status_t GraphicBuffer::unflatten(void const* buffer, size_t size,
-        int fds[], size_t count)
-{
+status_t GraphicBuffer::unflatten(
+        void const*& buffer, size_t& size, int const*& fds, size_t& count) {
     if (size < 8*sizeof(int)) return NO_MEMORY;
 
     int const* buf = static_cast<int const*>(buffer);
@@ -271,6 +296,10 @@ status_t GraphicBuffer::unflatten(void const* buffer, size_t size,
         memcpy(h->data,          fds,     numFds*sizeof(int));
         memcpy(h->data + numFds, &buf[8], numInts*sizeof(int));
         handle = h;
+#ifndef MTK_DEFAULT_AOSP
+        ALOGD("create handle(%p) (w:%d, h:%d, f:%d)",
+            handle, stride, height, format);
+#endif
     } else {
         width = height = stride = format = usage = 0;
         handle = NULL;
@@ -289,16 +318,12 @@ status_t GraphicBuffer::unflatten(void const* buffer, size_t size,
         }
     }
 
+    buffer = reinterpret_cast<void const*>(static_cast<int const*>(buffer) + sizeNeeded);
+    size -= sizeNeeded;
+    fds += numFds;
+    count -= numFds;
+
     return NO_ERROR;
-}
-
-
-void GraphicBuffer::setIndex(int index) {
-    mIndex = index;
-}
-
-int GraphicBuffer::getIndex() const {
-    return mIndex;
 }
 
 // ---------------------------------------------------------------------------

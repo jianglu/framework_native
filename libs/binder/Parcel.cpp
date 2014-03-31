@@ -22,12 +22,13 @@
 #include <binder/IPCThreadState.h>
 #include <binder/Binder.h>
 #include <binder/BpBinder.h>
-#include <utils/Debug.h>
 #include <binder/ProcessState.h>
+#include <binder/TextOutput.h>
+
+#include <utils/Debug.h>
 #include <utils/Log.h>
 #include <utils/String8.h>
 #include <utils/String16.h>
-#include <utils/TextOutput.h>
 #include <utils/misc.h>
 #include <utils/Flattenable.h>
 #include <cutils/ashmem.h>
@@ -616,6 +617,16 @@ status_t Parcel::writeInt32(int32_t val)
 {
     return writeAligned(val);
 }
+status_t Parcel::writeInt32Array(size_t len, const int32_t *val) {
+    if (!val) {
+        return writeAligned(-1);
+    }
+    status_t ret = writeAligned(len);
+    if (ret == NO_ERROR) {
+        ret = write(val, len * sizeof(*val));
+    }
+    return ret;
+}
 
 status_t Parcel::writeInt64(int64_t val)
 {
@@ -740,10 +751,12 @@ status_t Parcel::writeDupFileDescriptor(int fd)
 {
     int dupFd = dup(fd);
     if (dupFd < 0) {
+        ALOGE("writeDupFileDescriptor: error %d dup fd %d\n", errno, fd);
         return -errno;
     }
     status_t err = writeFileDescriptor(dupFd, true /*takeOwnership*/);
     if (err) {
+        ALOGE("writeDupFileDescriptor: error %d write fd %d\n", err, dupFd);
         close(dupFd);
     }
     return err;
@@ -797,13 +810,13 @@ status_t Parcel::writeBlob(size_t len, WritableBlob* outBlob)
     return status;
 }
 
-status_t Parcel::write(const Flattenable& val)
+status_t Parcel::write(const FlattenableHelperInterface& val)
 {
     status_t err;
 
     // size if needed
-    size_t len = val.getFlattenedSize();
-    size_t fd_count = val.getFdCount();
+    const size_t len = val.getFlattenedSize();
+    const size_t fd_count = val.getFdCount();
 
     err = this->writeInt32(len);
     if (err) return err;
@@ -812,7 +825,7 @@ status_t Parcel::write(const Flattenable& val)
     if (err) return err;
 
     // payload
-    void* buf = this->writeInplace(PAD_SIZE(len));
+    void* const buf = this->writeInplace(PAD_SIZE(len));
     if (buf == NULL)
         return BAD_VALUE;
 
@@ -1167,20 +1180,24 @@ status_t Parcel::readBlob(size_t len, ReadableBlob* outBlob) const
     if (fd == int(BAD_TYPE)) return BAD_VALUE;
 
     void* ptr = ::mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
-    if (!ptr) return NO_MEMORY;
+    if (ptr == MAP_FAILED)
+    {
+	    ALOGE("readBlob: read from ashmem but fail to mmap fd %d errno %d\n", fd, errno);
+	    return NO_MEMORY;
+    }
 
     outBlob->init(true /*mapped*/, ptr, len);
     return NO_ERROR;
 }
 
-status_t Parcel::read(Flattenable& val) const
+status_t Parcel::read(FlattenableHelperInterface& val) const
 {
     // size
     const size_t len = this->readInt32();
     const size_t fd_count = this->readInt32();
 
     // payload
-    void const* buf = this->readInplace(PAD_SIZE(len));
+    void const* const buf = this->readInplace(PAD_SIZE(len));
     if (buf == NULL)
         return BAD_VALUE;
 
@@ -1388,8 +1405,14 @@ void Parcel::freeDataNoInit()
         mOwner(this, mData, mDataSize, mObjects, mObjectsSize, mOwnerCookie);
     } else {
         releaseObjects();
-        if (mData) free(mData);
-        if (mObjects) free(mObjects);
+        if (mData) {
+	    free(mData);
+	    mData = 0;
+	}
+        if (mObjects) {
+	    free(mObjects);
+	    mObjects = NULL;
+	}
     }
 }
 

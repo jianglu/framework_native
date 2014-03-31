@@ -135,6 +135,7 @@ class Composer : public Singleton<Composer>
 
 public:
     sp<IBinder> createDisplay(const String8& displayName, bool secure);
+    void destroyDisplay(const sp<IBinder>& display);
     sp<IBinder> getBuiltInDisplay(int32_t id);
 
     status_t setPosition(const sp<SurfaceComposerClient>& client, const sp<IBinder>& id,
@@ -177,6 +178,11 @@ public:
     static void closeGlobalTransaction(bool synchronous) {
         Composer::getInstance().closeGlobalTransactionImpl(synchronous);
     }
+
+#ifndef MTK_DEFAULT_AOSP
+    status_t setFlagsEx(const sp<SurfaceComposerClient>& client, const sp<IBinder>& id,
+            uint32_t flags, uint32_t mask);
+#endif
 };
 
 ANDROID_SINGLETON_STATIC_INSTANCE(Composer);
@@ -186,6 +192,10 @@ ANDROID_SINGLETON_STATIC_INSTANCE(Composer);
 sp<IBinder> Composer::createDisplay(const String8& displayName, bool secure) {
     return ComposerService::getComposerService()->createDisplay(displayName,
             secure);
+}
+
+void Composer::destroyDisplay(const sp<IBinder>& display) {
+    return ComposerService::getComposerService()->destroyDisplay(display);
 }
 
 sp<IBinder> Composer::getBuiltInDisplay(int32_t id) {
@@ -237,8 +247,13 @@ void Composer::closeGlobalTransactionImpl(bool synchronous) {
 }
 
 void Composer::setAnimationTransactionImpl() {
+#ifndef MTK_DEFAULT_AOSP
+    // remove aniamtion transaction here
+    // since it forces into sync mode transaction, and may block WMS in some gui cases
+#else
     Mutex::Autolock _l(mLock);
     mAnimation = true;
+#endif
 }
 
 layer_state_t* Composer::getLayerStateLocked(
@@ -416,6 +431,22 @@ void Composer::setDisplayProjection(const sp<IBinder>& token,
     mForceSynchronous = true; // TODO: do we actually still need this?
 }
 
+#ifndef MTK_DEFAULT_AOSP
+status_t Composer::setFlagsEx(const sp<SurfaceComposerClient>& client,
+        const sp<IBinder>& id, uint32_t flags,
+        uint32_t mask) {
+    Mutex::Autolock _l(mLock);
+    layer_state_t* s = getLayerStateLocked(client, id);
+    if (!s)
+        return BAD_INDEX;
+    s->what |= layer_state_t::eVisibilityChanged;
+    s->flagsEx &= ~mask;
+    s->flagsEx |= (flags & mask);
+    s->maskEx |= mask;
+    return NO_ERROR;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 
 SurfaceComposerClient::SurfaceComposerClient()
@@ -488,6 +519,10 @@ sp<SurfaceControl> SurfaceComposerClient::createSurface(
 sp<IBinder> SurfaceComposerClient::createDisplay(const String8& displayName,
         bool secure) {
     return Composer::getInstance().createDisplay(displayName, secure);
+}
+
+void SurfaceComposerClient::destroyDisplay(const sp<IBinder>& display) {
+    Composer::getInstance().destroyDisplay(display);
 }
 
 sp<IBinder> SurfaceComposerClient::getBuiltInDisplay(int32_t id) {
@@ -592,6 +627,13 @@ void SurfaceComposerClient::setDisplayProjection(const sp<IBinder>& token,
             layerStackRect, displayRect);
 }
 
+#ifndef MTK_DEFAULT_AOSP
+status_t SurfaceComposerClient::setFlagsEx(const sp<IBinder>& id, uint32_t flags,
+        uint32_t mask) {
+    return getComposer().setFlagsEx(this, id, flags, mask);
+}
+#endif
+
 // ----------------------------------------------------------------------------
 
 status_t SurfaceComposerClient::getDisplayInfo(
@@ -608,6 +650,14 @@ void SurfaceComposerClient::unblankDisplay(const sp<IBinder>& token) {
     ComposerService::getComposerService()->unblank(token);
 }
 
+#ifndef MTK_DEFAULT_AOSP
+status_t SurfaceComposerClient::getDisplayInfoEx(
+        const sp<IBinder>& display, DisplayInfoEx* info)
+{
+    return ComposerService::getComposerService()->getDisplayInfoEx(display, info);
+}
+#endif
+
 // ----------------------------------------------------------------------------
 
 status_t ScreenshotClient::capture(
@@ -618,8 +668,7 @@ status_t ScreenshotClient::capture(
     sp<ISurfaceComposer> s(ComposerService::getComposerService());
     if (s == NULL) return NO_INIT;
     return s->captureScreen(display, producer,
-            reqWidth, reqHeight, minLayerZ, maxLayerZ,
-            false);
+            reqWidth, reqHeight, minLayerZ, maxLayerZ);
 }
 
 ScreenshotClient::ScreenshotClient()
@@ -633,7 +682,8 @@ ScreenshotClient::~ScreenshotClient() {
 
 sp<CpuConsumer> ScreenshotClient::getCpuConsumer() const {
     if (mCpuConsumer == NULL) {
-        mCpuConsumer = new CpuConsumer(1);
+        mBufferQueue = new BufferQueue();
+        mCpuConsumer = new CpuConsumer(mBufferQueue, 1);
         mCpuConsumer->setName(String8("ScreenshotClient"));
     }
     return mCpuConsumer;
@@ -652,14 +702,20 @@ status_t ScreenshotClient::update(const sp<IBinder>& display,
         mHaveBuffer = false;
     }
 
-    status_t err = s->captureScreen(display,cpuConsumer->getBufferQueue(),
-            reqWidth, reqHeight, minLayerZ, maxLayerZ, true);
+    status_t err = s->captureScreen(display, mBufferQueue,
+            reqWidth, reqHeight, minLayerZ, maxLayerZ);
 
     if (err == NO_ERROR) {
         err = mCpuConsumer->lockNextBuffer(&mBuffer);
         if (err == NO_ERROR) {
             mHaveBuffer = true;
+#ifndef MTK_DEFAULT_AOSP
+        } else {
+            ALOGE("ScreenshotClient: lockNextBuffer failed: %s (%d)", strerror(-err), err);
         }
+#else
+        }
+#endif
     }
     return err;
 }

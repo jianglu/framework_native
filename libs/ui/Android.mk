@@ -33,6 +33,16 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	liblog
 
+# --- MediaTek -------------------------------------------------------------
+MTK_PATH = ../../../../$(MTK_ROOT)/frameworks-ext/native/libs/ui
+
+LOCAL_SRC_FILES += \
+	$(MTK_PATH)/Fence.cpp
+
+LOCAL_SHARED_LIBRARIES += \
+	libbinder
+# --------------------------------------------------------------------------
+
 ifneq ($(BOARD_FRAMEBUFFER_FORCE_FORMAT),)
 LOCAL_CFLAGS += -DFRAMEBUFFER_FORCE_FORMAT=$(BOARD_FRAMEBUFFER_FORCE_FORMAT)
 endif

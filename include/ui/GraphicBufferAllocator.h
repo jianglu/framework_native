@@ -78,6 +78,9 @@ private:
         PixelFormat format;
         uint32_t usage;
         size_t size;
+#ifndef MTK_DEFAULT_AOSP
+        uint32_t pid;
+#endif
     };
     
     static Mutex sLock;
@@ -88,6 +91,10 @@ private:
     ~GraphicBufferAllocator();
     
     alloc_device_t  *mAllocDev;
+
+#ifndef MTK_DEFAULT_AOSP
+    bool mIsDumpCallStack;
+#endif
 };
 
 // ---------------------------------------------------------------------------

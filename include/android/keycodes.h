@@ -265,6 +265,16 @@ enum {
     AKEYCODE_ASSIST          = 219,
     AKEYCODE_BRIGHTNESS_DOWN = 220,
     AKEYCODE_BRIGHTNESS_UP   = 221,
+    AKEYCODE_MEDIA_AUDIO_TRACK = 222,
+    /// M:[SmartBook]Special key @{
+    AKEYCODE_WIFI_TOGGLE     = 223,
+    AKEYCODE_BT_TOGGLE       = 224,
+    AKEYCODE_LOCK_TOGGLE     = 225,
+    AKEYCODE_IME_TOGGLE      = 226,
+    AKEYCODE_MESSAGING       = 227,
+    AKEYCODE_GALLERY         = 228,
+    /// @}
+
 
     // NOTE: If you add a new keycode here you must also add it to several other files.
     //       Refer to frameworks/base/core/java/android/view/KeyEvent.java for the full list.

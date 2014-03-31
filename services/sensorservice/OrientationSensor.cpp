@@ -33,8 +33,40 @@ OrientationSensor::OrientationSensor()
     : mSensorDevice(SensorDevice::getInstance()),
       mSensorFusion(SensorFusion::getInstance())
 {
+    // FIXME: instead of using the SensorFusion code, we should use
+    // the SENSOR_TYPE_ROTATION_VECTOR instead. This way we could use the
+    // HAL's implementation.
 }
+#ifdef MTK_SHOW_MSENSOR_TOAST_SUPPORT
+/// M: register new sensor service implement for sensor toast new feature@{
+bool OrientationSensor::process(sensors_event_t* outEvent,
+        const sensors_event_t& event)
+{
+    if (event.type == SENSOR_TYPE_MAGNETIC_FIELD) {
+        if (mSensorFusion.hasEstimate()) {
+            vec3_t g;
+            const float rad2deg = 180 / M_PI;
+            const mat33_t R(mSensorFusion.getRotationMatrix());
+            g[0] = atan2f(-R[1][0], R[0][0])    * rad2deg;
+            g[1] = atan2f(-R[2][1], R[2][2])    * rad2deg;
+            g[2] = asinf ( R[2][0])             * rad2deg;
+            if (g[0] < 0)
+                g[0] += 360;
 
+            *outEvent = event;
+            outEvent->orientation.azimuth = g.x;
+            outEvent->orientation.pitch   = g.y;
+            outEvent->orientation.roll    = g.z;
+            outEvent->orientation.status  = event.magnetic.status;
+            outEvent->sensor = '_ypr';
+            outEvent->type = SENSOR_TYPE_ORIENTATION;
+            return true;
+        }
+    }
+    return false;
+}
+/// @}
+#else
 bool OrientationSensor::process(sensors_event_t* outEvent,
         const sensors_event_t& event)
 {
@@ -61,19 +93,19 @@ bool OrientationSensor::process(sensors_event_t* outEvent,
     }
     return false;
 }
-
+#endif
 status_t OrientationSensor::activate(void* ident, bool enabled) {
-    return mSensorFusion.activate(this, enabled);
+    return mSensorFusion.activate(ident, enabled);
 }
 
 status_t OrientationSensor::setDelay(void* ident, int handle, int64_t ns) {
-    return mSensorFusion.setDelay(this, ns);
+    return mSensorFusion.setDelay(ident, ns);
 }
 
 Sensor OrientationSensor::getSensor() const {
     sensor_t hwSensor;
     hwSensor.name       = "Orientation Sensor";
-    hwSensor.vendor     = "Google Inc.";
+    hwSensor.vendor     = "AOSP";
     hwSensor.version    = 1;
     hwSensor.handle     = '_ypr';
     hwSensor.type       = SENSOR_TYPE_ORIENTATION;

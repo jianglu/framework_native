@@ -22,12 +22,18 @@
      Personal Media Players (PMPs), small tablets (7" or less), and similar
      devices.
 -->
+<!--
+		MTK81126 comments:    
+		<feature name="android.hardware.sensor.compass" />
+    <feature name="android.hardware.sensor.accelerometer" />
+    these two core features are removed from the list because we have a MTK solution for whole sensor feature
+    we can make those phones which not use msensor or gsensor to pass CTS under mtk solution otherwise, those phones
+    don't use gsensor or msensor may meet a CTS fail 
+-->
 <permissions>
     <feature name="android.hardware.camera" />
     <feature name="android.hardware.location" />
     <feature name="android.hardware.location.network" />
-    <feature name="android.hardware.sensor.compass" />
-    <feature name="android.hardware.sensor.accelerometer" />
     <feature name="android.hardware.bluetooth" />
     <feature name="android.hardware.touchscreen" />
     <feature name="android.hardware.microphone" />
@@ -36,6 +42,8 @@
     <feature name="android.software.app_widgets" />
     <feature name="android.software.home_screen" />
     <feature name="android.software.input_methods" />
+    <!-- Feature to specify if the device supports adding device admins. -->
+    <feature name="android.software.device_admin" />
     <!-- devices with GPS must include android.hardware.location.gps.xml -->
     <!-- devices with an autofocus camera and/or flash must include either
          android.hardware.camera.autofocus.xml or 

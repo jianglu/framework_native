@@ -39,8 +39,9 @@ class GraphicBufferMapper;
 
 class GraphicBuffer
     : public ANativeObjectBase< ANativeWindowBuffer, GraphicBuffer, RefBase >,
-      public Flattenable
+      public Flattenable<GraphicBuffer>
 {
+    friend class Flattenable<GraphicBuffer>;
 public:
 
     enum {
@@ -48,7 +49,7 @@ public:
         USAGE_SW_READ_RARELY    = GRALLOC_USAGE_SW_READ_RARELY,
         USAGE_SW_READ_OFTEN     = GRALLOC_USAGE_SW_READ_OFTEN,
         USAGE_SW_READ_MASK      = GRALLOC_USAGE_SW_READ_MASK,
-        
+
         USAGE_SW_WRITE_NEVER    = GRALLOC_USAGE_SW_WRITE_NEVER,
         USAGE_SW_WRITE_RARELY   = GRALLOC_USAGE_SW_WRITE_RARELY,
         USAGE_SW_WRITE_OFTEN    = GRALLOC_USAGE_SW_WRITE_OFTEN,
@@ -87,7 +88,7 @@ public:
     uint32_t getUsage() const           { return usage; }
     PixelFormat getPixelFormat() const  { return format; }
     Rect getBounds() const              { return Rect(width, height); }
-    
+
     status_t reallocate(uint32_t w, uint32_t h, PixelFormat f, uint32_t usage);
 
     status_t lock(uint32_t usage, void** vaddr);
@@ -98,15 +99,18 @@ public:
     status_t unlock();
 
     ANativeWindowBuffer* getNativeBuffer() const;
-    
-    void setIndex(int index);
-    int getIndex() const;
 
     // for debugging
     static void dumpAllocationsToSystemLog();
 
+    // Flattenable protocol
+    size_t getFlattenedSize() const;
+    size_t getFdCount() const;
+    status_t flatten(void*& buffer, size_t& size, int*& fds, size_t& count) const;
+    status_t unflatten(void const*& buffer, size_t& size, int const*& fds, size_t& count);
+
 private:
-    virtual ~GraphicBuffer();
+    ~GraphicBuffer();
 
     enum {
         ownNone   = 0,
@@ -131,23 +135,13 @@ private:
     GraphicBuffer& operator = (const GraphicBuffer& rhs);
     const GraphicBuffer& operator = (const GraphicBuffer& rhs) const;
 
-    status_t initSize(uint32_t w, uint32_t h, PixelFormat format, 
+    status_t initSize(uint32_t w, uint32_t h, PixelFormat format,
             uint32_t usage);
 
     void free_handle();
 
-    // Flattenable interface
-    size_t getFlattenedSize() const;
-    size_t getFdCount() const;
-    status_t flatten(void* buffer, size_t size,
-            int fds[], size_t count) const;
-    status_t unflatten(void const* buffer, size_t size,
-            int fds[], size_t count);
-
-
     GraphicBufferMapper& mBufferMapper;
     ssize_t mInitCheck;
-    int mIndex;
 
     // If we're wrapping another buffer then this reference will make sure it
     // doesn't get freed.

@@ -37,9 +37,11 @@ sp<IServiceManager> defaultServiceManager()
     
     {
         AutoMutex _l(gDefaultServiceManagerLock);
-        if (gDefaultServiceManager == NULL) {
+        while (gDefaultServiceManager == NULL) {
             gDefaultServiceManager = interface_cast<IServiceManager>(
                 ProcessState::self()->getContextObject(NULL));
+            if (gDefaultServiceManager == NULL)
+                sleep(1);
         }
     }
     
@@ -155,11 +157,22 @@ public:
             bool allowIsolated)
     {
         Parcel data, reply;
+	unsigned n;
+        status_t err;
         data.writeInterfaceToken(IServiceManager::getInterfaceDescriptor());
         data.writeString16(name);
         data.writeStrongBinder(service);
         data.writeInt32(allowIsolated ? 1 : 0);
-        status_t err = remote()->transact(ADD_SERVICE_TRANSACTION, data, &reply);
+        for (n = 1; n <= 5; n++) {
+            err = remote()->transact(ADD_SERVICE_TRANSACTION, data, &reply);
+            if (err == -EPIPE) {
+                ALOGI("%s is waiting for serviceManager... (retry %d)\n",
+                    String8(name).string(), n);
+                sleep(1);
+            } else {
+                break;
+            }
+        }
         return err == NO_ERROR ? reply.readExceptionCode() : err;
     }
 

@@ -39,9 +39,18 @@ public:
     SurfaceTextureLayer(const sp<SurfaceFlinger>& flinger);
     virtual ~SurfaceTextureLayer();
 
-    // After calling the superclass connect(), set or clear synchronous
-    // mode appropriately for the specified API.
-    virtual status_t connect(int api, QueueBufferOutput* output);
+#ifndef MTK_DEFAULT_AOSP
+public:
+    // for get real type
+    virtual int32_t getType() const {
+        return BufferQueue::TYPE_SurfaceTextureLayer;
+    }
+
+    // for buffer log
+    virtual status_t queueBuffer(int buf,
+                                 const QueueBufferInput& input,
+                                 QueueBufferOutput* output);
+#endif
 };
 
 // ---------------------------------------------------------------------------

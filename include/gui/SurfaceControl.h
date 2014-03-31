@@ -96,6 +96,12 @@ private:
     sp<IGraphicBufferProducer>  mGraphicBufferProducer;
     mutable Mutex               mLock;
     mutable sp<Surface>         mSurfaceData;
+
+#ifndef MTK_DEFAULT_AOSP
+public:
+    // setting extra surface flags
+    status_t    setFlagsEx(uint32_t flags, uint32_t mask);
+#endif
 };
 
 }; // namespace android

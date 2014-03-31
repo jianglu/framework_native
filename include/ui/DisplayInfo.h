@@ -34,8 +34,6 @@ struct DisplayInfo {
     uint8_t orientation;
     bool secure;
     uint8_t reserved[2];
-    // TODO: this needs to go away (currently needed only by webkit)
-    PixelFormatInfo pixelFormatInfo;
 };
 
 /* Display orientations as defined in Surface.java and ISurfaceComposer.h. */
@@ -45,6 +43,12 @@ enum {
     DISPLAY_ORIENTATION_180 = 2,
     DISPLAY_ORIENTATION_270 = 3
 };
+
+#ifndef MTK_DEFAULT_AOSP
+struct DisplayInfoEx {
+    uint8_t subtype;
+};
+#endif
 
 }; // namespace android
 

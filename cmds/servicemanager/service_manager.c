@@ -41,13 +41,25 @@ static struct {
     { AID_RADIO, "radio.simphonebook" },
 /* TODO: remove after phone services are updated: */
     { AID_RADIO, "phone" },
+    { AID_RADIO, "phoneEx" },
     { AID_RADIO, "sip" },
     { AID_RADIO, "isms" },
     { AID_RADIO, "iphonesubinfo" },
     { AID_RADIO, "simphonebook" },
+    { AID_RADIO, "isms2" },
+    { AID_RADIO, "iphonesubinfo2" },
+    { AID_RADIO, "simphonebook2" },
     { AID_MEDIA, "common_time.clock" },
     { AID_MEDIA, "common_time.config" },
     { AID_KEYSTORE, "android.security.keystore" },
+    { AID_MEDIA, "media.VTS" },
+    { AID_RADIO, "iphonesubinfo3" },
+    { AID_RADIO, "iphonesubinfo4" },  
+    { AID_RADIO, "simphonebook3" },
+    { AID_RADIO, "simphonebook4" },
+    { AID_RADIO, "isms3" },
+    { AID_RADIO, "isms4" },    
+    { AID_RADIO, "terservice" },
 };
 
 void *svcmgr_handle;

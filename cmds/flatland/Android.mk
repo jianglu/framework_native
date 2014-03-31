@@ -9,7 +9,7 @@ LOCAL_SRC_FILES:=   \
 
 LOCAL_MODULE:= flatland
 
-LOCAL_MODULE_TAGS := tests
+LOCAL_MODULE_TAGS := eng
 
 LOCAL_SHARED_LIBRARIES := \
     libEGL      \

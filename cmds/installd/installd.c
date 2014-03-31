@@ -83,7 +83,7 @@ static int do_get_size(char **arg, char reply[REPLY_MAX])
     int64_t asecsize = 0;
     int res = 0;
 
-        /* pkgdir, persona, apkpath */
+        /* pkgdir, userid, apkpath */
     res = get_size(arg[0], atoi(arg[1]), arg[2], arg[3], arg[4], arg[5],
             &codesize, &datasize, &cachesize, &asecsize);
 
@@ -103,13 +103,12 @@ static int do_rm_user_data(char **arg, char reply[REPLY_MAX])
 
 static int do_mk_user_data(char **arg, char reply[REPLY_MAX])
 {
-    return make_user_data(arg[0], atoi(arg[1]), atoi(arg[2]), arg[3]);
-                             /* pkgname, uid, userid, seinfo */
+    return make_user_data(arg[0], atoi(arg[1]), atoi(arg[2])); /* pkgname, uid, userid */
 }
 
 static int do_rm_user(char **arg, char reply[REPLY_MAX])
 {
-    return delete_persona(atoi(arg[0])); /* userid */
+    return delete_user(atoi(arg[0])); /* userid */
 }
 
 static int do_movefiles(char **arg, char reply[REPLY_MAX])
@@ -120,6 +119,11 @@ static int do_movefiles(char **arg, char reply[REPLY_MAX])
 static int do_linklib(char **arg, char reply[REPLY_MAX])
 {
     return linklib(arg[0], arg[1], atoi(arg[2]));
+}
+
+/// M: [PMS Recovery]
+static int do_change_uid_root(char **arg, char reply[REPLY_MAX]) {
+    return change_uid_root(arg[0], atoi(arg[1]));
 }
 
 struct cmdinfo {
@@ -143,8 +147,10 @@ struct cmdinfo cmds[] = {
     { "rmuserdata",           2, do_rm_user_data },
     { "movefiles",            0, do_movefiles },
     { "linklib",              3, do_linklib },
-    { "mkuserdata",           4, do_mk_user_data },
+    { "mkuserdata",           3, do_mk_user_data },
     { "rmuser",               1, do_rm_user },
+    /// M: [PMS Recovery] Add command
+    { "changeuidroot",        2, do_change_uid_root },
 };
 
 static int readx(int s, void *_buf, int count)
@@ -199,7 +205,7 @@ static int execute(int s, char cmd[BUFFER_MAX])
     unsigned short count;
     int ret = -1;
 
-//    ALOGI("execute('%s')\n", cmd);
+    // ALOGI("execute('%s')\n", cmd);
 
         /* default reply is "" */
     reply[0] = 0;
@@ -241,7 +247,7 @@ done:
     if (n > BUFFER_MAX) n = BUFFER_MAX;
     count = n;
 
-//    ALOGI("reply: '%s'\n", cmd);
+    // ALOGI("reply: '%s'\n", cmd);
     if (writex(s, &count, sizeof(count))) return -1;
     if (writex(s, cmd, count)) return -1;
     return 0;
@@ -364,69 +370,78 @@ int initialize_directories() {
         }
     }
 
-    if (version == 0) {
-        // Introducing multi-user, so migrate /data/media contents into /data/media/0
-        ALOGD("Upgrading /data/media for multi-user");
-
+    if (access(android_media_dir.path, F_OK) == -1) {
         // Ensure /data/media
         if (fs_prepare_dir(android_media_dir.path, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
             goto fail;
         }
+    }
 
-        // /data/media.tmp
-        char media_tmp_dir[PATH_MAX];
-        snprintf(media_tmp_dir, PATH_MAX, "%smedia.tmp", android_data_dir.path);
-
-        // Only copy when upgrade not already in progress
-        if (access(media_tmp_dir, F_OK) == -1) {
-            if (rename(android_media_dir.path, media_tmp_dir) == -1) {
-                ALOGE("Failed to move legacy media path: %s", strerror(errno));
-                goto fail;
-            }
+    bool is_multi_user_supported = getenv("EMULATED_STORAGE_TARGET") != NULL;
+    if (version == 0) {
+        if(is_multi_user_supported){
+            // Introducing multi-user, so migrate /data/media contents into /data/media/0
+            ALOGD("Upgrading /data/media for multi-user");
         }
+        else
+            ALOGD("multi-user was not enabled, don't migrate /data/media contents into /data/media/0");
 
-        // Create /data/media again
-        if (fs_prepare_dir(android_media_dir.path, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
-            goto fail;
-        }
+        if(is_multi_user_supported){
+            // /data/media.tmp
+            char media_tmp_dir[PATH_MAX];
+            snprintf(media_tmp_dir, PATH_MAX, "%smedia.tmp", android_data_dir.path);
 
-        // /data/media/0
-        char owner_media_dir[PATH_MAX];
-        snprintf(owner_media_dir, PATH_MAX, "%s0", android_media_dir.path);
-
-        // Move any owner data into place
-        if (access(media_tmp_dir, F_OK) == 0) {
-            if (rename(media_tmp_dir, owner_media_dir) == -1) {
-                ALOGE("Failed to move owner media path: %s", strerror(errno));
-                goto fail;
-            }
-        }
-
-        // Ensure media directories for any existing users
-        DIR *dir;
-        struct dirent *dirent;
-        char user_media_dir[PATH_MAX];
-
-        dir = opendir(user_data_dir);
-        if (dir != NULL) {
-            while ((dirent = readdir(dir))) {
-                if (dirent->d_type == DT_DIR) {
-                    const char *name = dirent->d_name;
-
-                    // skip "." and ".."
-                    if (name[0] == '.') {
-                        if (name[1] == 0) continue;
-                        if ((name[1] == '.') && (name[2] == 0)) continue;
-                    }
-
-                    // /data/media/<user_id>
-                    snprintf(user_media_dir, PATH_MAX, "%s%s", android_media_dir.path, name);
-                    if (fs_prepare_dir(user_media_dir, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
-                        goto fail;
-                    }
+            // Only copy when upgrade not already in progress
+            if (access(media_tmp_dir, F_OK) == -1) {
+                if (rename(android_media_dir.path, media_tmp_dir) == -1) {
+                    ALOGE("Failed to move legacy media path: %s", strerror(errno));
+                    goto fail;
                 }
             }
-            closedir(dir);
+
+            // Create /data/media again
+            if (fs_prepare_dir(android_media_dir.path, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
+                goto fail;
+            }
+
+            // /data/media/0
+            char owner_media_dir[PATH_MAX];
+            snprintf(owner_media_dir, PATH_MAX, "%s0", android_media_dir.path);
+
+            // Move any owner data into place
+            if (access(media_tmp_dir, F_OK) == 0) {
+                if (rename(media_tmp_dir, owner_media_dir) == -1) {
+                    ALOGE("Failed to move owner media path: %s", strerror(errno));
+                    goto fail;
+                }
+            }
+
+            // Ensure media directories for any existing users
+            DIR *dir;
+            struct dirent *dirent;
+            char user_media_dir[PATH_MAX];
+
+            dir = opendir(user_data_dir);
+            if (dir != NULL) {
+                while ((dirent = readdir(dir))) {
+                    if (dirent->d_type == DT_DIR) {
+                        const char *name = dirent->d_name;
+
+                        // skip "." and ".."
+                        if (name[0] == '.') {
+                            if (name[1] == 0) continue;
+                            if ((name[1] == '.') && (name[2] == 0)) continue;
+                        }
+
+                        // /data/media/<user_id>
+                        snprintf(user_media_dir, PATH_MAX, "%s%s", android_media_dir.path, name);
+                        if (fs_prepare_dir(user_media_dir, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
+                            goto fail;
+                        }
+                    }
+                }
+                closedir(dir);
+            }
         }
 
         version = 1;
@@ -456,10 +471,13 @@ int initialize_directories() {
         version = 2;
     }
 
-    if (ensure_media_user_dirs(0) == -1) {
-        ALOGE("Failed to setup media for user 0");
-        goto fail;
+    if(is_multi_user_supported){
+        if (ensure_media_user_dirs(0) == -1) {
+            ALOGE("Failed to setup media for user 0");
+            goto fail;
+        }
     }
+
     if (fs_prepare_dir(media_obb_dir, 0770, AID_MEDIA_RW, AID_MEDIA_RW) == -1) {
         goto fail;
     }

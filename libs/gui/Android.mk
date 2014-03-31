@@ -2,13 +2,14 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= \
+	IGraphicBufferConsumer.cpp \
+	IConsumerListener.cpp \
 	BitTube.cpp \
 	BufferItemConsumer.cpp \
 	BufferQueue.cpp \
 	ConsumerBase.cpp \
 	CpuConsumer.cpp \
 	DisplayEventReceiver.cpp \
-	DummyConsumer.cpp \
 	GLConsumer.cpp \
 	GraphicBufferAlloc.cpp \
 	GuiConfig.cpp \
@@ -38,6 +39,25 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	liblog
 
+# --- MediaTek -------------------------------------------------------------------------------------
+MTK_PATH = ../../../../$(MTK_ROOT)/frameworks-ext/native/libs/gui
+
+LOCAL_SRC_FILES += \
+	$(MTK_PATH)/BufferQueue.cpp \
+	$(MTK_PATH)/FpsCounter.cpp
+
+LOCAL_CFLAGS := -DLOG_TAG=\"GLConsumer\"
+
+ifeq ($(MTK_DP_FRAMEWORK), yes)
+	LOCAL_CFLAGS += -DUSE_DP
+	LOCAL_SHARED_LIBRARIES += libdpframework libhardware
+	LOCAL_STATIC_LIBRARIES += libgralloc_extra
+	LOCAL_SRC_FILES += $(MTK_PATH)/BufferQueueDump.cpp
+	LOCAL_C_INCLUDES += \
+		$(TOP)/$(MTK_ROOT)/hardware/dpframework/inc \
+		$(TOP)/$(MTK_ROOT)/hardware/gralloc_extra/include
+endif # MTK_DP_FRAMEWORK
+# --------------------------------------------------------------------------------------------------
 
 LOCAL_MODULE:= libgui
 

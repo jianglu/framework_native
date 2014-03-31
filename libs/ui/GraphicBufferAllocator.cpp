@@ -26,6 +26,12 @@
 
 #include <ui/GraphicBufferAllocator.h>
 
+#ifndef MTK_DEFAULT_AOSP
+#include <binder/IPCThreadState.h>
+#include <cutils/properties.h>
+#include <utils/CallStack.h>
+#endif
+
 namespace android {
 // ---------------------------------------------------------------------------
 
@@ -44,6 +50,15 @@ GraphicBufferAllocator::GraphicBufferAllocator()
     if (err == 0) {
         gralloc_open(module, &mAllocDev);
     }
+
+#ifndef MTK_DEFAULT_AOSP
+    char value[PROPERTY_VALUE_MAX];
+    property_get("debug.gbuf.callstack", value, "0");
+    mIsDumpCallStack = atoi(value);
+    if (true == mIsDumpCallStack) {
+        ALOGI("!!! dump GraphicBufferAllocator callstack for pid:%d !!!", getpid());
+    }
+#endif
 }
 
 GraphicBufferAllocator::~GraphicBufferAllocator()
@@ -63,6 +78,17 @@ void GraphicBufferAllocator::dump(String8& result) const
     const size_t c = list.size();
     for (size_t i=0 ; i<c ; i++) {
         const alloc_rec_t& rec(list.valueAt(i));
+#ifndef MTK_DEFAULT_AOSP
+        if (rec.size) {
+            snprintf(buffer, SIZE, "%10p: %7.2f KiB | %4u (%4u) x %4u | %8X | 0x%08x | %u\n",
+                    list.keyAt(i), rec.size/1024.0f,
+                    rec.w, rec.s, rec.h, rec.format, rec.usage, rec.pid);
+        } else {
+            snprintf(buffer, SIZE, "%10p: unknown     | %4u (%4u) x %4u | %8X | 0x%08x | %u\n",
+                    list.keyAt(i),
+                    rec.w, rec.s, rec.h, rec.format, rec.usage, rec.pid);
+        }
+#else
         if (rec.size) {
             snprintf(buffer, SIZE, "%10p: %7.2f KiB | %4u (%4u) x %4u | %8X | 0x%08x\n",
                     list.keyAt(i), rec.size/1024.0f,
@@ -72,6 +98,7 @@ void GraphicBufferAllocator::dump(String8& result) const
                     list.keyAt(i),
                     rec.w, rec.s, rec.h, rec.format, rec.usage);
         }
+#endif
         result.append(buffer);
         total += rec.size;
     }
@@ -123,14 +150,32 @@ status_t GraphicBufferAllocator::alloc(uint32_t w, uint32_t h, PixelFormat forma
         rec.format = format;
         rec.usage = usage;
         rec.size = h * stride[0] * bpp;
+#ifndef MTK_DEFAULT_AOSP
+        rec.pid = IPCThreadState::self()->getCallingPid();
+#endif
         list.add(*handle, rec);
     }
+
+#ifndef MTK_DEFAULT_AOSP
+    // dump call stack here after handle value got
+    if (true == mIsDumpCallStack) {
+        ALOGD("[GraphicBufferAllocator::alloc] handle:%p", *handle);
+        CallStack stack("    ");
+    }
+#endif
 
     return err;
 }
 
 status_t GraphicBufferAllocator::free(buffer_handle_t handle)
 {
+#ifndef MTK_DEFAULT_AOSP
+    if (true == mIsDumpCallStack) {
+        ALOGD("[GraphicBufferAllocator::free] handle:%p", handle);
+        CallStack stack("    ");
+    }
+#endif
+
     ATRACE_CALL();
     status_t err;
 
