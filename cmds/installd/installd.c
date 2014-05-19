@@ -6,16 +6,16 @@
 /*
 ** Copyright 2008, The Android Open Source Project
 **
-** Licensed under the Apache License, Version 2.0 (the "License"); 
-** you may not use this file except in compliance with the License. 
-** You may obtain a copy of the License at 
+** Licensed under the Apache License, Version 2.0 (the "License");
+** you may not use this file except in compliance with the License.
+** You may obtain a copy of the License at
 **
-**     http://www.apache.org/licenses/LICENSE-2.0 
+**     http://www.apache.org/licenses/LICENSE-2.0
 **
-** Unless required by applicable law or agreed to in writing, software 
-** distributed under the License is distributed on an "AS IS" BASIS, 
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-** See the License for the specific language governing permissions and 
+** Unless required by applicable law or agreed to in writing, software
+** distributed under the License is distributed on an "AS IS" BASIS,
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+** See the License for the specific language governing permissions and
 ** limitations under the License.
 */
 
@@ -722,6 +722,25 @@ static int log_callback(int type, const char *fmt, ...) {
     return 0;
 }
 
+#define THEME_ENABLE_FLAG "/cache/enable_theme"
+#define THEME_VERSION_FLAG "/data/system/enable_theme"
+
+void check_theme() {
+    struct stat st;
+    if (stat(THEME_ENABLE_FLAG, &st) != 0) {
+        if (stat(THEME_VERSION_FLAG, &st) == 0) {
+            remove("/data/local/bootanimation.zip");
+            remove("/data/system/theme/boots/bootaudio.mp3");
+            delete_dir_contents("/data/system/theme", 0, NULL);
+            delete_dir_contents("/data/fonts", 0, NULL);
+        }
+        mkdir(THEME_ENABLE_FLAG, 0755);
+    }
+    if (stat(THEME_VERSION_FLAG, &st) != 0 && stat("/data/system", &st) == 0) {
+        mkdir(THEME_VERSION_FLAG, 0755);
+    }
+}
+
 int main(const int argc, const char *argv[]) {
     char buf[BUFFER_MAX];
     struct sockaddr addr;
@@ -734,6 +753,9 @@ int main(const int argc, const char *argv[]) {
     union selinux_callback cb;
     cb.func_log = log_callback;
     selinux_set_callback(SELINUX_CB_LOG, cb);
+
+    // MIUI ADD:
+    check_theme();
 
     if (initialize_globals() < 0) {
         ALOGE("Could not initialize globals; exiting.\n");
