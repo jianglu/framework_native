@@ -88,6 +88,9 @@ struct HDCPModule {
     // Request to shutdown the active HDCP session.
     virtual status_t shutdownAsync() = 0;
 
+    // Get capability
+    virtual uint32_t getCaps() = 0;
+    
     // ENCRYPTION only:
     // Encrypt data according to the HDCP spec. "size" bytes of data are
     // available at "inData" (virtual address), "size" may not be a multiple

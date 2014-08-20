@@ -185,9 +185,6 @@ SurfaceFlinger::SurfaceFlinger()
     // init mtk data
     mBootAnimationEnabled = true;
     sContentsDirty = false;
-
-    // init properties setting first
-    setMTKProperties();
 #endif
 }
 
@@ -604,6 +601,9 @@ void SurfaceFlinger::init() {
         eglTerminate(mEGLDisplay);
         exit(0);
     }
+
+    // init properties setting first
+    setMTKProperties();
 #else
     LOG_ALWAYS_FATAL_IF(mEGLContext == EGL_NO_CONTEXT,
             "couldn't create EGLContext");
@@ -3081,6 +3081,9 @@ class GraphicProducerWrapper : public BBinder, public MessageHandler {
         this->code = code;
         this->data = &data;
         this->reply = reply;
+#ifndef MTK_DEFAULT_AOSP
+        this->result = NO_ERROR;
+#endif
         android_atomic_acquire_store(0, &memoryBarrier);
         if (exitPending) {
             // if we've exited, we run the message synchronously right here
@@ -3090,7 +3093,11 @@ class GraphicProducerWrapper : public BBinder, public MessageHandler {
             looper->sendMessage(this, Message(MSG_API_CALL));
             barrier.wait();
         }
+#ifndef MTK_DEFAULT_AOSP
+        return this->result;
+#else
         return NO_ERROR;
+#endif
     }
 
     /*
@@ -3100,7 +3107,11 @@ class GraphicProducerWrapper : public BBinder, public MessageHandler {
     virtual void handleMessage(const Message& message) {
         android_atomic_release_load(&memoryBarrier);
         if (message.what == MSG_API_CALL) {
+#ifndef MTK_DEFAULT_AOSP
+            result = impl->asBinder()->transact(code, data[0], reply);
+#else
             impl->asBinder()->transact(code, data[0], reply);
+#endif
             barrier.open();
         } else if (message.what == MSG_EXIT) {
             exitRequested = true;

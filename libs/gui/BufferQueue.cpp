@@ -1351,6 +1351,9 @@ status_t BufferQueue::consumerDisconnect() {
     mQueue.clear();
     freeAllBuffersLocked();
     mDequeueCondition.broadcast();
+#ifndef MTK_DEFAULT_AOSP
+    mDump->onConsumerDisconnect();
+#endif
     return NO_ERROR;
 }
 

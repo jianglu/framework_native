@@ -88,7 +88,11 @@ const vec3& Transform::operator [] (size_t i) const {
 }
 
 bool Transform::transformed() const {
+#ifndef MTK_DEFAULT_AOSP
+    return type() >= TRANSLATE;
+#else
     return type() > TRANSLATE;
+#endif
 }
 
 float Transform::tx() const {

@@ -144,7 +144,7 @@ typedef struct II420ColorConverter {
     int (*freeVideoAllocMVA) (II420ColorConverter *converter, void* BufHandler, unsigned long a_u4Va, 
         unsigned long ap_u4Pa, unsigned long a_u4Size, void *a_pvM4uConfig_p);
     int (*secondConvertDecoderOutputToI420) (
-        II420ColorConverter *converter, void* srcBits, int srcWidth, int srcHeight, ARect srcRect, void* dstBits);
+        II420ColorConverter *converter, void* srcBits, int srcWidth, int srcHeight, int srcWStride, int srcHStride, ARect srcRect, void* dstBits);
 
     MtkI420ColorConverterInfo *mMtkColorConvertInfo;
 #endif //ANDROID_DEFAULT_CODE

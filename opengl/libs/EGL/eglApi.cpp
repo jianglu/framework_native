@@ -1097,6 +1097,66 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw)
         }
     }
 
+    if (CC_UNLIKELY(dp->finishOnSwap))
+    {
+        char buffer[PROPERTY_VALUE_MAX];
+        int  value;
+
+        memset(buffer, 0x0, sizeof(buffer));
+        property_get("debug.gpu.dumpoutput.enable", buffer, "0");
+        value = atoi(buffer);
+        if (1 == value)
+        {
+            static int32_t count = 0;
+            void           *pPixel;
+            int32_t        width;
+            int32_t        height;
+            char           name[64];
+            FILE           *pFile;
+
+            egl_context_t * const c = get_context( egl_tls_t::getContext() );
+            if (c)
+            {
+                s->cnx->egl.eglQuerySurface(
+                    dp->disp.dpy, s->surface, EGL_WIDTH, &width);
+
+                s->cnx->egl.eglQuerySurface(
+                    dp->disp.dpy, s->surface, EGL_HEIGHT, &height);
+            
+                pPixel = (void*)malloc(width * height * 4);
+                if (NULL != pPixel)
+                {
+                    s->cnx->hooks[c->version]->gl.glReadPixels(0, 0, width, height,
+                        GL_RGBA,GL_UNSIGNED_BYTE, pPixel);
+           
+                    sprintf(name, "/data/gpu_dump/gpuout%d_%d_w%d_h%d_s%d.raw\0", count, getpid(), width, height, 4);
+                    count++;
+
+                    pFile = fopen(name, "wb");
+                    if (NULL != pFile)
+                    {
+                        fwrite(pPixel, 1, width * height * 4, pFile);
+                        fclose(pFile);
+                    }
+                    else
+                    {
+                        ALOGE("EGL: Can't open file for dump output\n");
+                    }
+
+                    free(pPixel);
+                }
+                else
+                {
+                    ALOGE("EGL: Can't malloc temp buffer for dump output\n");
+                }
+            }    
+            else
+            {
+                ALOGE("EGL: Can't get context for dump output\n");  
+            }
+        }
+    }
+
     return s->cnx->egl.eglSwapBuffers(dp->disp.dpy, s->surface);
 }
 

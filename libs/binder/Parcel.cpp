@@ -627,6 +627,16 @@ status_t Parcel::writeInt32Array(size_t len, const int32_t *val) {
     }
     return ret;
 }
+status_t Parcel::writeByteArray(size_t len, const uint8_t *val) {
+    if (!val) {
+        return writeAligned(-1);
+    }
+    status_t ret = writeAligned(len);
+    if (ret == NO_ERROR) {
+        ret = write(val, len * sizeof(*val));
+    }
+    return ret;
+}
 
 status_t Parcel::writeInt64(int64_t val)
 {
@@ -1323,6 +1333,7 @@ size_t Parcel::ipcObjectsCount() const
 void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     const size_t* objects, size_t objectsCount, release_func relFunc, void* relCookie)
 {
+    size_t minOffset = 0;
     freeDataNoInit();
     mError = NO_ERROR;
     mData = const_cast<uint8_t*>(data);
@@ -1335,6 +1346,16 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     mNextObjectHint = 0;
     mOwner = relFunc;
     mOwnerCookie = relCookie;
+    for (size_t i = 0; i < mObjectsSize; i++) {
+        size_t offset = mObjects[i];
+        if (offset < minOffset) {
+            ALOGE("%s: bad object offset %zd < %zd\n",
+                  __func__, offset, minOffset);
+            mObjectsSize = 0;
+            break;
+        }
+        minOffset = offset + sizeof(flat_binder_object);
+    }
     scanForFds();
 }
 

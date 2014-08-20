@@ -759,8 +759,8 @@ int dexopt(const char *apk_path, uid_t uid, int is_public)
         if (strncmp(persist_sys_dalvik_vm_lib, "libdvm", 6) == 0) {
             run_dexopt(zip_fd, out_fd, apk_path, out_path, dexopt_flags);
         } else if (strncmp(persist_sys_dalvik_vm_lib, "libart", 6) == 0) {
-            //run_dex2oat(zip_fd, out_fd, apk_path, out_path, dexopt_flags);
-            run_dexopt(zip_fd, out_fd, apk_path, out_path, dexopt_flags);
+            run_dex2oat(zip_fd, out_fd, apk_path, out_path, dexopt_flags);
+            //run_dexopt(zip_fd, out_fd, apk_path, out_path, dexopt_flags);
         } else {
             exit(69);   /* Unexpected persist.sys.dalvik.vm.lib value */
         }
