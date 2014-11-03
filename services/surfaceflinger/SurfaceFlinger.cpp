@@ -98,6 +98,10 @@
 #include "../../../../miui/frameworks/base/native/services/surfaceflinger/Blur/Blur.h"
 #endif
 
+#ifdef HAS_HANDY_MODE
+#include "../../../../miui/frameworks/base/native/services/surfaceflinger/handymode/HandyModeForSF.h"
+#endif
+
 #define DISPLAY_COUNT       1
 
 /*
@@ -171,12 +175,16 @@ SurfaceFlinger::SurfaceFlinger()
         mLastTransactionTime(0),
         mBootFinished(false),
         mHasBlurLayer(false),
+        mIsHandyMode(false),
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
         mHasColorMatrix(false)
 {
     ALOGI("SurfaceFlinger is starting");
+#ifdef HAS_HANDY_MODE
+    HandyModeForSF::init(this);
+#endif
 
     // debugging stuff...
     char value[PROPERTY_VALUE_MAX];
@@ -1306,6 +1314,9 @@ void SurfaceFlinger::setUpHWComposer() {
                         mHasBlurLayer = false;
 #endif
 
+#ifdef HAS_HANDY_MODE
+                        mIsHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
+#endif
                         HWComposer::LayerListIterator cur = hwc.begin(id);
                         const HWComposer::LayerListIterator end = hwc.end(id);
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
@@ -1313,9 +1324,11 @@ void SurfaceFlinger::setUpHWComposer() {
                             layer->setGeometry(hw, *cur);
 #ifdef MTK_AOSP_ENHANCEMENT
                             if (!hw->mustRecompose() ||
-                                mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
+                                mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
+                                    || mIsHandyMode) {
 #else
-                            if (mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
+                            if (mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
+                                    || mIsHandyMode) {
 #endif
                                 cur->setSkip(true);
                             }
@@ -2184,6 +2197,12 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
     }
 #endif
 
+#ifdef HAS_HANDY_MODE
+    if (mIsHandyMode) {
+        HandyModeForSF::getInstance()->onDoComposeSurface();
+    }
+#endif
+
     const Transform& tr = hw->getTransform();
     if (cur != end) {
         // we're using h/w composer
@@ -2647,6 +2666,12 @@ void SurfaceFlinger::onInitializeDisplays() {
     Vector<DisplayInfo> displayInfos;
     getDisplayConfigs(mBuiltinDisplays[DisplayDevice::DISPLAY_PRIMARY], &displayInfos);
     Blur::initialize(displayInfos[0].density, true, displayInfos[0].w, displayInfos[0].h);
+#endif
+
+#ifdef HAS_HANDY_MODE
+    Vector<DisplayInfo> displayInfos2;
+    getDisplayConfigs(mBuiltinDisplays[DisplayDevice::DISPLAY_PRIMARY], &displayInfos2);
+    HandyModeForSF::getInstance()->setupScreenSize(displayInfos2[0].w, displayInfos2[0].h);
 #endif
 }
 
@@ -3327,6 +3352,16 @@ status_t SurfaceFlinger::onTransact(
                 mPrimaryDispSync.setRefreshSkipCount(n);
                 return NO_ERROR;
             }
+#ifdef HAS_HANDY_MODE
+            case 1098: {
+                int mode = data.readInt32();
+                float scale = data.readFloat();
+                HandyModeForSF::getInstance()->changeMode(mode, scale);
+                invalidateHwcGeometry();
+                repaintEverything();
+                return NO_ERROR;
+            }
+#endif
 #ifdef HAS_BLUR
             case 1099: {
                 int noRealblur = data.readInt32();
@@ -3749,9 +3784,16 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                         // via an FBO, which means we didn't have to create
                         // an EGLSurface and therefore we're not
                         // dependent on the context's EGLConfig.
+
+#ifdef HAS_HANDY_MODE
+                        HandyModeForSF::getInstance()->onPreScreenshotRender();
+#endif
                         renderScreenImplLocked(
                             hw, sourceCrop, reqWidth, reqHeight, minLayerZ, maxLayerZ, true,
                             useIdentityTransform, rotation);
+#ifdef HAS_HANDY_MODE
+                        HandyModeForSF::getInstance()->onPostScreenshotRender();
+#endif
 
                         // Attempt to create a sync khr object that can produce a sync point. If that
                         // isn't available, create a non-dupable sync object in the fallback path and

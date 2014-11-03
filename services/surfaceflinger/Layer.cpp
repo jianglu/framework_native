@@ -60,6 +60,10 @@
 #include "../../../../miui/frameworks/base/native/services/surfaceflinger/Blur/Blur.h"
 #endif
 
+#ifdef HAS_HANDY_MODE
+#include "../../../../miui/frameworks/base/native/services/surfaceflinger/handymode/HandyModeForSF.h"
+#endif
+
 #define DEBUG_RESIZE    0
 
 namespace android {
@@ -563,25 +567,46 @@ Rect Layer::getPosition(
 // ---------------------------------------------------------------------------
 
 void Layer::draw(const sp<const DisplayDevice>& hw, const Region& clip) const {
+#ifdef HAS_HANDY_MODE
+    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
+    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
+#endif
 #ifdef HAS_BLUR
     if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
 #endif
     onDraw(hw, clip, false);
+#ifdef HAS_HANDY_MODE
+    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
+#endif
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw,
         bool useIdentityTransform) const {
+#ifdef HAS_HANDY_MODE
+    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
+    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
+#endif
 #ifdef HAS_BLUR
     if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
 #endif
     onDraw(hw, Region(hw->bounds()), useIdentityTransform);
+#ifdef HAS_HANDY_MODE
+    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
+#endif
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw) const {
+#ifdef HAS_HANDY_MODE
+    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
+    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
+#endif
 #ifdef HAS_BLUR
     if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
 #endif
     onDraw(hw, Region(hw->bounds()), false);
+#ifdef HAS_HANDY_MODE
+    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
+#endif
 }
 
 void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
@@ -638,7 +663,11 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 
     if (!blackOutLayer) {
         // TODO: we could be more subtle with isFixedSize()
-        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize();
+        bool isHandyScaleMode = false;
+#ifdef HAS_HANDY_MODE
+        isHandyScaleMode = HandyModeForSF::getInstance()->isInScaleMode();
+#endif
+        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
 
         // Query the texture matrix given our current filtering mode.
         float textureMatrix[16];
@@ -817,6 +846,12 @@ void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh,
     for (size_t i=0 ; i<4 ; i++) {
         position[i].y = hw_h - position[i].y;
     }
+
+#ifdef HAS_HANDY_MODE
+    if (HandyModeForSF::getInstance()->isInHandyMode()) {
+        HandyModeForSF::getInstance()->onPostLayerComputeGeometry(this, mesh);
+    }
+#endif
 }
 
 bool Layer::isOpaque(const Layer::State& s) const

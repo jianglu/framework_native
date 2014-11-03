@@ -480,6 +480,7 @@ private:
     nsecs_t mLastTransactionTime;
     bool mBootFinished;
     bool mHasBlurLayer;
+    bool mIsHandyMode;
 
     // these are thread safe
     mutable MessageQueue mEventQueue;
