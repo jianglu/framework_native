@@ -56,6 +56,10 @@
 #include <cutils/xlog.h>
 #endif
 
+#ifdef HAS_BLUR
+#include "../../../../miui/frameworks/base/native/services/surfaceflinger/Blur/Blur.h"
+#endif
+
 #define DEBUG_RESIZE    0
 
 namespace android {
@@ -91,6 +95,11 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mClientRef(client),
         mPotentialCursor(false)
 {
+#ifdef HAS_BLUR
+    blurSurface = NULL;
+    coveredByBlur = false;
+    mQueuedFramesBackForBlur = 0;
+#endif
     mCurrentCrop.makeInvalid();
     mFlinger->getRenderEngine().genTextures(1, &mTextureName);
     mTexture.init(Texture::TEXTURE_EXTERNAL, mTextureName);
@@ -163,6 +172,9 @@ Layer::~Layer() {
         }
     }
 #endif
+#ifdef HAS_BLUR
+    if (blurSurface != NULL) delete blurSurface;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +191,9 @@ void Layer::onLayerDisplayed(const sp<const DisplayDevice>& /* hw */,
 
 void Layer::onFrameAvailable() {
     android_atomic_inc(&mQueuedFrames);
+#ifdef HAS_BLUR
+    mQueuedFramesBackForBlur = mQueuedFrames;
+#endif
     mFlinger->signalLayerUpdate();
 }
 
@@ -548,15 +563,24 @@ Rect Layer::getPosition(
 // ---------------------------------------------------------------------------
 
 void Layer::draw(const sp<const DisplayDevice>& hw, const Region& clip) const {
+#ifdef HAS_BLUR
+    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
+#endif
     onDraw(hw, clip, false);
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw,
         bool useIdentityTransform) const {
+#ifdef HAS_BLUR
+    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
+#endif
     onDraw(hw, Region(hw->bounds()), useIdentityTransform);
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw) const {
+#ifdef HAS_BLUR
+    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
+#endif
     onDraw(hw, Region(hw->bounds()), false);
 }
 
@@ -943,6 +967,12 @@ uint32_t Layer::doTransaction(uint32_t flags) {
                 (type >= Transform::SCALE));
     }
 
+#ifdef HAS_BLUR
+    if ((c.flags & layer_state_t::eLayerBlur) != (s.flags & layer_state_t::eLayerBlur)) {
+        setupBlurSurface((c.flags & layer_state_t::eLayerBlur) != 0);
+    }
+#endif
+
     // Commit the transaction
     commitTransaction();
     return flags;
@@ -960,6 +990,9 @@ void Layer::commitTransaction() {
         XLOGD("%s", result.string());
     }
 #endif
+#ifdef HAS_BLUR
+    if (Blur::hasBlurLayer()) Blur::invalidateBlur(this);
+#endif
 }
 
 uint32_t Layer::getTransactionFlags(uint32_t flags) {
@@ -969,6 +1002,29 @@ uint32_t Layer::getTransactionFlags(uint32_t flags) {
 uint32_t Layer::setTransactionFlags(uint32_t flags) {
     return android_atomic_or(flags, &mTransactionFlags);
 }
+
+#ifdef HAS_BLUR
+void Layer::setupBlurSurface(bool enable) {
+    if (enable) {
+        if (blurSurface == NULL) {
+            const Layer::State& c(getCurrentState());
+            blurSurface = new BlurSurface(this, c.active.w, c.active.h);
+        }
+        const int64_t now = nanoseconds_to_milliseconds(systemTime(SYSTEM_TIME_MONOTONIC));
+        blurSurface->show(now);
+    } else if (blurSurface != NULL) {
+        const int64_t now = nanoseconds_to_milliseconds(systemTime(SYSTEM_TIME_MONOTONIC));
+        blurSurface->hide(now);
+    }
+}
+
+void Layer::destroyBlurSurface() {
+    if (blurSurface != NULL) {
+        delete blurSurface;
+        blurSurface = NULL;
+    }
+}
+#endif
 
 bool Layer::setPosition(float x, float y) {
     if (mCurrentState.transform.tx() == x && mCurrentState.transform.ty() == y)

@@ -39,6 +39,9 @@ struct layer_state_t {
     enum {
         eLayerHidden        = 0x01,     // SURFACE_HIDDEN in SurfaceControl.java
         eLayerOpaque        = 0x02,     // SURFACE_OPAQUE
+#ifdef HAS_BLUR
+        eLayerBlur          = 0x80,     // FLAG_BLUR in SurfaceControl.java
+#endif
     };
 
     enum {

@@ -62,6 +62,9 @@ class Colorizer;
 class DisplayDevice;
 class GraphicBuffer;
 class SurfaceFlinger;
+#ifdef HAS_BLUR
+class BlurSurface;
+#endif
 
 // ---------------------------------------------------------------------------
 
@@ -77,6 +80,16 @@ class Layer : public SurfaceFlingerConsumer::ContentsChangedListener {
 
 public:
     mutable bool contentDirty;
+
+#ifdef HAS_BLUR
+    BlurSurface* blurSurface;
+    mutable bool coveredByBlur;
+    mutable volatile int32_t mQueuedFramesBackForBlur;
+
+    void setupBlurSurface(bool enable);
+    void destroyBlurSurface();
+#endif
+
     // regions below are in window-manager space
     Region visibleRegion;
     Region coveredRegion;

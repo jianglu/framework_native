@@ -94,6 +94,10 @@
 #endif
 #endif
 
+#ifdef HAS_BLUR
+#include "../../../../miui/frameworks/base/native/services/surfaceflinger/Blur/Blur.h"
+#endif
+
 #define DISPLAY_COUNT       1
 
 /*
@@ -166,6 +170,7 @@ SurfaceFlinger::SurfaceFlinger()
         mDebugInTransaction(0),
         mLastTransactionTime(0),
         mBootFinished(false),
+        mHasBlurLayer(false),
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
@@ -1286,6 +1291,21 @@ void SurfaceFlinger::setUpHWComposer() {
                         hw->getVisibleLayersSortedByZ());
                     const size_t count = currentLayers.size();
                     if (hwc.createWorkList(id, count) == NO_ERROR) {
+#ifdef HAS_BLUR
+                        mHasBlurLayer = Blur::hasBlurLayer();
+                        if (!mHasBlurLayer) {
+                            for (size_t i=0; i<count; ++i) {
+                                const sp<Layer>& layer(currentLayers[i]);
+                                if (Blur::isLayerBlur(layer)) {
+                                    mHasBlurLayer = true;
+                                    break;
+                                }
+                            }
+                        }
+#else
+                        mHasBlurLayer = false;
+#endif
+
                         HWComposer::LayerListIterator cur = hwc.begin(id);
                         const HWComposer::LayerListIterator end = hwc.end(id);
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
@@ -1293,9 +1313,9 @@ void SurfaceFlinger::setUpHWComposer() {
                             layer->setGeometry(hw, *cur);
 #ifdef MTK_AOSP_ENHANCEMENT
                             if (!hw->mustRecompose() ||
-                                mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
+                                mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
 #else
-                            if (mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
+                            if (mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
 #endif
                                 cur->setSkip(true);
                             }
@@ -2155,6 +2175,15 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
 
     const Vector< sp<Layer> >& layers(hw->getVisibleLayersSortedByZ());
     const size_t count = layers.size();
+
+#ifdef HAS_BLUR
+    if (mHasBlurLayer) {
+        if (Blur::onDoComposeSurfaces(hw, layers)) {
+            signalLayerUpdate();
+        }
+    }
+#endif
+
     const Transform& tr = hw->getTransform();
     if (cur != end) {
         // we're using h/w composer
@@ -2186,7 +2215,13 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                         break;
                     }
                     case HWC_FRAMEBUFFER: {
+#ifdef HAS_BLUR
+                        if (!mHasBlurLayer || !Blur::isLayerCovered(layer)) {
+                            layer->draw(hw, clip);
+                        }
+#else
                         layer->draw(hw, clip);
+#endif
 #ifdef MTK_AOSP_ENHANCEMENT
                         // debug log
                         if (CC_UNLIKELY(sPropertiesState.mLogRepaint)) {
@@ -2215,7 +2250,13 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             const Region clip(dirty.intersect(
                     tr.transform(layer->visibleRegion)));
             if (!clip.isEmpty()) {
+#ifdef HAS_BLUR
+                if (!mHasBlurLayer || !Blur::isLayerCovered(layer)) {
+                    layer->draw(hw, clip);
+                }
+#else
                 layer->draw(hw, clip);
+#endif
 #ifdef MTK_AOSP_ENHANCEMENT
                 // debug log
                 if (CC_UNLIKELY(sPropertiesState.mLogRepaint)) {
@@ -2600,6 +2641,13 @@ void SurfaceFlinger::onInitializeDisplays() {
     const nsecs_t period =
             getHwComposer().getRefreshPeriod(HWC_DISPLAY_PRIMARY);
     mAnimFrameTracker.setDisplayRefreshPeriod(period);
+
+#ifdef HAS_BLUR
+    // initialize blur
+    Vector<DisplayInfo> displayInfos;
+    getDisplayConfigs(mBuiltinDisplays[DisplayDevice::DISPLAY_PRIMARY], &displayInfos);
+    Blur::initialize(displayInfos[0].density, true, displayInfos[0].w, displayInfos[0].h);
+#endif
 }
 
 void SurfaceFlinger::initializeDisplays() {
@@ -3279,6 +3327,13 @@ status_t SurfaceFlinger::onTransact(
                 mPrimaryDispSync.setRefreshSkipCount(n);
                 return NO_ERROR;
             }
+#ifdef HAS_BLUR
+            case 1099: {
+                int noRealblur = data.readInt32();
+                Blur::setEnable(noRealblur == 0);
+                return NO_ERROR;
+            }
+#endif
         }
     }
     return err;
