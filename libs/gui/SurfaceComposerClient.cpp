@@ -318,7 +318,9 @@ status_t Composer::setFlags(const sp<SurfaceComposerClient>& client,
     if (mask & layer_state_t::eLayerOpaque) {
         s->what |= layer_state_t::eOpacityChanged;
     }
-    if (mask & layer_state_t::eLayerHidden) {
+    // MIUI MOD
+    // if (mask & layer_state_t::eLayerHidden) {
+    if (mask & layer_state_t::eLayerHidden | layer_state_t::eLayerBlur) {
         s->what |= layer_state_t::eVisibilityChanged;
     }
     s->flags &= ~mask;
