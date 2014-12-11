@@ -40,9 +40,6 @@ LOCAL_SRC_FILES:= \
 LOCAL_CFLAGS:= -DLOG_TAG=\"SurfaceFlinger\"
 LOCAL_CFLAGS += -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES
 
--include miui/frameworks/base/native/services/surfaceflinger/Blur.mk
--include miui/frameworks/base/native/services/surfaceflinger/handymode/HandyModeForSF.mk
-
 ifeq ($(TARGET_BOARD_PLATFORM),omap4)
 	LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
 endif
@@ -151,6 +148,8 @@ endif
 # ----------------------------------------------------------------------------
 
 LOCAL_MODULE:= libsurfaceflinger
+
+-include miui/frameworks/base/native/services/surfaceflinger/MiuiExtension.mk
 
 include $(BUILD_SHARED_LIBRARY)
 

@@ -95,11 +95,11 @@
 #endif
 
 #ifdef HAS_BLUR
-#include "../../../../miui/frameworks/base/native/services/surfaceflinger/Blur/Blur.h"
+#include "Blur.h"
 #endif
 
 #ifdef HAS_HANDY_MODE
-#include "../../../../miui/frameworks/base/native/services/surfaceflinger/handymode/HandyModeForSF.h"
+#include "HandyModeForSF.h"
 #endif
 
 #define DISPLAY_COUNT       1
