@@ -722,7 +722,8 @@ static int log_callback(int type, const char *fmt, ...) {
     return 0;
 }
 
-#define THEME_ENABLE_FLAG "/cache/enable_theme"
+#define THEME_PATH         "/data/system/theme"
+#define THEME_ENABLE_FLAG  "/cache/enable_theme"
 #define THEME_VERSION_FLAG "/data/system/enable_theme"
 
 void check_theme() {
@@ -731,7 +732,7 @@ void check_theme() {
         if (stat(THEME_VERSION_FLAG, &st) == 0) {
             remove("/data/local/bootanimation.zip");
             remove("/data/system/theme/boots/bootaudio.mp3");
-            delete_dir_contents("/data/system/theme", 0, NULL);
+            delete_dir_contents(THEME_PATH, 0, NULL);
             delete_dir_contents("/data/fonts", 0, NULL);
         }
         mkdir(THEME_ENABLE_FLAG, 0755);
@@ -739,6 +740,11 @@ void check_theme() {
     if (stat(THEME_VERSION_FLAG, &st) != 0 && stat("/data/system", &st) == 0) {
         mkdir(THEME_VERSION_FLAG, 0755);
     }
+
+    // for L
+    mkdir(THEME_PATH, 0755);
+    chown(THEME_PATH, AID_THEME, AID_THEME);
+    setfilecon(THEME_PATH, "u:object_r:theme_data_file:s0");
 }
 
 int main(const int argc, const char *argv[]) {
