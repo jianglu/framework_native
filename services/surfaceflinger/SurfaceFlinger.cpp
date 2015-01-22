@@ -2194,12 +2194,18 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         if (Blur::onDoComposeSurfaces(hw, layers)) {
             signalLayerUpdate();
         }
+        if (!Blur::hasBlurLayer()) {
+            invalidateHwcGeometry();
+        }
     }
 #endif
 
 #ifdef HAS_HANDY_MODE
     if (mIsHandyMode) {
         HandyModeForSF::getInstance()->onDoComposeSurface();
+        if (!HandyModeForSF::getInstance()->isInHandyMode()) {
+            invalidateHwcGeometry();
+        }
     }
 #endif
 
