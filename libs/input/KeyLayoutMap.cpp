@@ -26,6 +26,10 @@
 #include <utils/Tokenizer.h>
 #include <utils/Timers.h>
 
+#if HAVE_ANDROID_OS 	
+#include <cutils/properties.h>	
+#endif	
+			
 // Enables debug output for the parser.
 #define DEBUG_PARSER 0
 
@@ -93,9 +97,36 @@ status_t KeyLayoutMap::mapKey(int32_t scanCode, int32_t usageCode,
         return NAME_NOT_FOUND;
     }
 
+#if HAVE_ANDROID_OS 	
+#define MEDIA_PREVIOUS_SCAN_CODE 165	
+#define MEDIA_NEXT_SCAN_CODE 163	
+if (scanCode == MEDIA_NEXT_SCAN_CODE || scanCode == MEDIA_PREVIOUS_SCAN_CODE) {	
+	char profile_value[PROPERTY_VALUE_MAX];	
+	char switch_value[PROPERTY_VALUE_MAX];	
+	unsigned int button_jack_switch = 0;	
+				
+	property_get("persist.sys.button_jack_profile", profile_value, "volume");	
+	property_get("persist.sys.button_jack_switch", switch_value, "0");	
+	button_jack_switch = atoi(switch_value);	
+	if (!strcmp(profile_value, "music")) {	
+	if (button_jack_switch == 1)	
+	*outKeyCode = (scanCode == MEDIA_PREVIOUS_SCAN_CODE) ? AKEYCODE_MEDIA_NEXT : AKEYCODE_MEDIA_PREVIOUS;	
+	else	
+	*outKeyCode = (scanCode == MEDIA_PREVIOUS_SCAN_CODE) ? AKEYCODE_MEDIA_PREVIOUS : AKEYCODE_MEDIA_NEXT;	
+	}	
+	else { // volume and auto 	
+	if (button_jack_switch == 1)	
+	*outKeyCode = (scanCode == MEDIA_PREVIOUS_SCAN_CODE) ? AKEYCODE_VOLUME_DOWN : AKEYCODE_VOLUME_UP;	
+	else	
+	*outKeyCode = (scanCode == MEDIA_PREVIOUS_SCAN_CODE) ? AKEYCODE_VOLUME_UP : AKEYCODE_VOLUME_DOWN;	
+	}	
+} else	
+*outKeyCode = key->keyCode;	
+*outFlags = key->flags;	
+#else
     *outKeyCode = key->keyCode;
     *outFlags = key->flags;
-
+#endif
 #if DEBUG_MAPPING
     ALOGD("mapKey: scanCode=%d, usageCode=0x%08x ~ Result keyCode=%d, outFlags=0x%08x.",
             scanCode, usageCode, *outKeyCode, *outFlags);
