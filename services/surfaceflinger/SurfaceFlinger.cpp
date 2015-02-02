@@ -1121,6 +1121,13 @@ void SurfaceFlinger::rebuildLayerStacks() {
             hw->undefinedRegion.set(bounds);
             hw->undefinedRegion.subtractSelf(tr.transform(opaqueRegion));
             hw->dirtyRegion.orSelf(dirtyRegion);
+#ifndef MTK_DEFAULT_AOSP
+            if (CC_UNLIKELY(
+                    (hw->getPageFlipCount() < 1) &&
+                    (hw->getDisplayType() == DisplayDevice::DISPLAY_PRIMARY))) {
+                hw->dirtyRegion.clear();
+            }
+#endif
         }
     }
 }
