@@ -1322,12 +1322,17 @@ void SurfaceFlinger::setUpHWComposer() {
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
                             const sp<Layer>& layer(currentLayers[i]);
                             layer->setGeometry(hw, *cur);
+#ifdef HAS_BLUR
+                            bool blurLayerSkip = Blur::needLayerSkip(layer);
+#else
+                            bool blurLayerSkip = false;
+#endif
 #ifdef MTK_AOSP_ENHANCEMENT
                             if (!hw->mustRecompose() ||
-                                mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
+                                blurLayerSkip || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
                                     || mIsHandyMode) {
 #else
-                            if (mHasBlurLayer || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
+                            if (blurLayerSkip || mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix
                                     || mIsHandyMode) {
 #endif
                                 cur->setSkip(true);
@@ -2194,9 +2199,7 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         if (Blur::onDoComposeSurfaces(hw, layers)) {
             signalLayerUpdate();
         }
-        if (!Blur::hasBlurLayer()) {
-            invalidateHwcGeometry();
-        }
+        invalidateHwcGeometry();
     }
 #endif
 
