@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,7 +93,9 @@ const vec3& Transform::operator [] (size_t i) const {
 }
 
 bool Transform::transformed() const {
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
+    // fix condition typo
+    // this causes transparent region error when layer not a (0, 0)
     return type() >= TRANSLATE;
 #else
     return type() > TRANSLATE;

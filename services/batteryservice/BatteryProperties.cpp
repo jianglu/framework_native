@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,16 +39,17 @@ status_t BatteryProperties::readFromParcel(Parcel* p) {
     chargerUsbOnline = p->readInt32() == 1 ? true : false;
     chargerWirelessOnline = p->readInt32() == 1 ? true : false;
     batteryStatus = p->readInt32();
-    batteryStatus_2nd = p->readInt32();
+    batteryStatus_smb = p->readInt32();
     batteryHealth = p->readInt32();
     batteryPresent = p->readInt32() == 1 ? true : false;
-    batteryPresent_2nd = p->readInt32() == 1 ? true : false;
+    batteryPresent_smb = p->readInt32() == 1 ? true : false;
     batteryLevel = p->readInt32();
-    batteryLevel_2nd = p->readInt32();
+    batteryLevel_smb = p->readInt32();
     batteryVoltage = p->readInt32();
     batteryCurrentNow = p->readInt32();
     batteryChargeCounter = p->readInt32();
     batteryTemperature = p->readInt32();
+    adjustPower = p->readInt32();
     batteryTechnology = String8((p->readString16()).string());
     return OK;
 }
@@ -53,16 +59,17 @@ status_t BatteryProperties::writeToParcel(Parcel* p) const {
     p->writeInt32(chargerUsbOnline ? 1 : 0);
     p->writeInt32(chargerWirelessOnline ? 1 : 0);
     p->writeInt32(batteryStatus);
-    p->writeInt32(batteryStatus_2nd);
+    p->writeInt32(batteryStatus_smb);
     p->writeInt32(batteryHealth);
     p->writeInt32(batteryPresent ? 1 : 0);
-    p->writeInt32(batteryPresent_2nd ? 1 : 0);
+    p->writeInt32(batteryPresent_smb ? 1 : 0);
     p->writeInt32(batteryLevel);
-    p->writeInt32(batteryLevel_2nd);
+    p->writeInt32(batteryLevel_smb);
     p->writeInt32(batteryVoltage);
     p->writeInt32(batteryCurrentNow);
     p->writeInt32(batteryChargeCounter);
     p->writeInt32(batteryTemperature);
+    p->writeInt32(adjustPower);
     p->writeString16(String16(batteryTechnology));
     return OK;
 }

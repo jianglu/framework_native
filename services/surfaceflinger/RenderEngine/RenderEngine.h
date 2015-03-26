@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,8 +29,11 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <ui/mat4.h>
+#include <Transform.h>
 
-#ifndef MTK_DEFAULT_AOSP
+#define EGL_NO_CONFIG ((EGLConfig)0)
+
+#ifdef MTK_AOSP_ENHANCEMENT
 #define DRM_IMAGE_PATH "/system/media/images/drm_disable_icon.png"
 #include <utils/Mutex.h>
 #include <utils/RefBase.h>
@@ -41,7 +49,7 @@ class Region;
 class Mesh;
 class Texture;
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 class DisplayDevice;
 #endif
 
@@ -54,8 +62,9 @@ class RenderEngine {
     };
     static GlesVersion parseGlesVersion(const char* str);
 
+    EGLConfig mEGLConfig;
     EGLContext mEGLContext;
-    void setEGLContext(EGLContext ctxt);
+    void setEGLHandles(EGLConfig config, EGLContext ctxt);
 
     virtual void bindImageAsFramebuffer(EGLImageKHR image, uint32_t* texName, uint32_t* fbName, uint32_t* status) = 0;
     virtual void unbindFramebuffer(uint32_t texName, uint32_t fbName) = 0;
@@ -65,7 +74,9 @@ protected:
     virtual ~RenderEngine() = 0;
 
 public:
-    static RenderEngine* create(EGLDisplay display, EGLConfig config);
+    static RenderEngine* create(EGLDisplay display, int hwcFormat);
+
+    static EGLConfig chooseEglConfig(EGLDisplay display, int format);
 
     // dump the extension strings. always call the base class.
     virtual void dump(String8& result);
@@ -94,7 +105,8 @@ public:
 
     // set-up
     virtual void checkErrors() const;
-    virtual void setViewportAndProjection(size_t vpw, size_t vph, size_t w, size_t h, bool yswap) = 0;
+    virtual void setViewportAndProjection(size_t vpw, size_t vph,
+            Rect sourceCrop, size_t hwh, bool yswap, Transform::orientation_flags rotation) = 0;
     virtual void setupLayerBlending(bool premultipliedAlpha, bool opaque, int alpha) = 0;
     virtual void setupDimLayerBlending(int alpha) = 0;
     virtual void setupLayerTexturing(const Texture& texture) = 0;
@@ -117,29 +129,30 @@ public:
     virtual size_t getMaxTextureSize() const = 0;
     virtual size_t getMaxViewportDims() const = 0;
 
+    EGLConfig getEGLConfig() const;
     EGLContext getEGLContext() const;
 
-#ifndef MTK_DEFAULT_AOSP
-private:
-    uint32_t mProtectedImageTexName;
-    mutable Mutex mProtectedImageLock;
-
+#ifdef MTK_AOSP_ENHANCEMENT
 protected:
-    virtual uint32_t createProtectedImageTextureLocked() = 0;
+    // for protect image texture control
+    Mutex    mProtectImageLock;
+    uint32_t mProtectImageTexName;
+    int32_t  mProtectImageWidth;
+    int32_t  mProtectImageHeight;
+
+    // bind to protect image texture, create a new one if now not exist
+    uint32_t createAndBindProtectImageTexLocked();
 
 public:
-    // for the protected layer texture and display
-    uint32_t getProtectedImageTexName();
-    uint32_t deleteProtectedImageTexture();
-    virtual void setupLayerProtectedImage() = 0;
+    // for protect image texture clear, MUST set to delete in SF main thread
+    uint32_t getAndClearProtectImageTexName();
 
-    // for AOSP display display orientation issue correction
-    void getHwInverseMatrix(const sp<const DisplayDevice>& hw, mat4& inv);
-    virtual void setViewportAndProjection(const sp<const DisplayDevice>& hw,
-            size_t vpw, size_t vph) = 0;
+    // setup for protect layer display
+    virtual void setupLayerProtectImage() = 0;
 
-    // debugging
-    void drawDebugLine(uint32_t w, uint32_t h) const;
+    // draw debugging line to the given DisplayDevice
+    void drawDebugLine(const sp<const DisplayDevice>& hw,
+            uint32_t color = 0xFFFFFFFF, uint32_t steps = 32) const;
 #endif
 };
 

@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +24,7 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <utils/Timers.h>
 
 #include <ui/PixelFormat.h>
 
@@ -33,7 +39,8 @@ struct DisplayInfo {
     float density;
     uint8_t orientation;
     bool secure;
-    uint8_t reserved[2];
+    nsecs_t appVsyncOffset;
+    nsecs_t presentationDeadline;
 };
 
 /* Display orientations as defined in Surface.java and ISurfaceComposer.h. */
@@ -44,7 +51,7 @@ enum {
     DISPLAY_ORIENTATION_270 = 3
 };
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT 
 struct DisplayInfoEx {
     uint8_t subtype;
 };

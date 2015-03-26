@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 /* 
 **
 ** Copyright 2009, The Android Open Source Project
@@ -78,9 +83,6 @@ private:
         PixelFormat format;
         uint32_t usage;
         size_t size;
-#ifndef MTK_DEFAULT_AOSP
-        uint32_t pid;
-#endif
     };
     
     static Mutex sLock;
@@ -92,7 +94,7 @@ private:
     
     alloc_device_t  *mAllocDev;
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT 
     bool mIsDumpCallStack;
 #endif
 };

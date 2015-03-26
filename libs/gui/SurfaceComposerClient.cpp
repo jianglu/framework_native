@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -166,6 +171,7 @@ public:
             uint32_t orientation,
             const Rect& layerStackRect,
             const Rect& displayRect);
+    void setDisplaySize(const sp<IBinder>& token, uint32_t width, uint32_t height);
 
     static void setAnimationTransaction() {
         Composer::getInstance().setAnimationTransactionImpl();
@@ -178,11 +184,6 @@ public:
     static void closeGlobalTransaction(bool synchronous) {
         Composer::getInstance().closeGlobalTransactionImpl(synchronous);
     }
-
-#ifndef MTK_DEFAULT_AOSP
-    status_t setFlagsEx(const sp<SurfaceComposerClient>& client, const sp<IBinder>& id,
-            uint32_t flags, uint32_t mask);
-#endif
 };
 
 ANDROID_SINGLETON_STATIC_INSTANCE(Composer);
@@ -247,13 +248,8 @@ void Composer::closeGlobalTransactionImpl(bool synchronous) {
 }
 
 void Composer::setAnimationTransactionImpl() {
-#ifndef MTK_DEFAULT_AOSP
-    // remove aniamtion transaction here
-    // since it forces into sync mode transaction, and may block WMS in some gui cases
-#else
     Mutex::Autolock _l(mLock);
     mAnimation = true;
-#endif
 }
 
 layer_state_t* Composer::getLayerStateLocked(
@@ -319,7 +315,12 @@ status_t Composer::setFlags(const sp<SurfaceComposerClient>& client,
     layer_state_t* s = getLayerStateLocked(client, id);
     if (!s)
         return BAD_INDEX;
-    s->what |= layer_state_t::eVisibilityChanged;
+    if (mask & layer_state_t::eLayerOpaque) {
+        s->what |= layer_state_t::eOpacityChanged;
+    }
+    if (mask & layer_state_t::eLayerHidden) {
+        s->what |= layer_state_t::eVisibilityChanged;
+    }
     s->flags &= ~mask;
     s->flags |= (flags & mask);
     s->mask |= mask;
@@ -431,21 +432,13 @@ void Composer::setDisplayProjection(const sp<IBinder>& token,
     mForceSynchronous = true; // TODO: do we actually still need this?
 }
 
-#ifndef MTK_DEFAULT_AOSP
-status_t Composer::setFlagsEx(const sp<SurfaceComposerClient>& client,
-        const sp<IBinder>& id, uint32_t flags,
-        uint32_t mask) {
+void Composer::setDisplaySize(const sp<IBinder>& token, uint32_t width, uint32_t height) {
     Mutex::Autolock _l(mLock);
-    layer_state_t* s = getLayerStateLocked(client, id);
-    if (!s)
-        return BAD_INDEX;
-    s->what |= layer_state_t::eVisibilityChanged;
-    s->flagsEx &= ~mask;
-    s->flagsEx |= (flags & mask);
-    s->maskEx |= mask;
-    return NO_ERROR;
+    DisplayState& s(getDisplayStateLocked(token));
+    s.width = width;
+    s.height = height;
+    s.what |= DisplayState::eDisplaySizeChanged;
 }
-#endif
 
 // ---------------------------------------------------------------------------
 
@@ -534,6 +527,21 @@ status_t SurfaceComposerClient::destroySurface(const sp<IBinder>& sid) {
         return mStatus;
     status_t err = mClient->destroySurface(sid);
     return err;
+}
+
+status_t SurfaceComposerClient::clearLayerFrameStats(const sp<IBinder>& token) const {
+    if (mStatus != NO_ERROR) {
+        return mStatus;
+    }
+    return mClient->clearLayerFrameStats(token);
+}
+
+status_t SurfaceComposerClient::getLayerFrameStats(const sp<IBinder>& token,
+        FrameStats* outStats) const {
+    if (mStatus != NO_ERROR) {
+        return mStatus;
+    }
+    return mClient->getLayerFrameStats(token, outStats);
 }
 
 inline Composer& SurfaceComposerClient::getComposer() {
@@ -627,48 +635,76 @@ void SurfaceComposerClient::setDisplayProjection(const sp<IBinder>& token,
             layerStackRect, displayRect);
 }
 
-#ifndef MTK_DEFAULT_AOSP
-status_t SurfaceComposerClient::setFlagsEx(const sp<IBinder>& id, uint32_t flags,
-        uint32_t mask) {
-    return getComposer().setFlagsEx(this, id, flags, mask);
+void SurfaceComposerClient::setDisplaySize(const sp<IBinder>& token,
+        uint32_t width, uint32_t height) {
+    Composer::getInstance().setDisplaySize(token, width, height);
 }
-#endif
 
 // ----------------------------------------------------------------------------
 
-status_t SurfaceComposerClient::getDisplayInfo(
-        const sp<IBinder>& display, DisplayInfo* info)
+status_t SurfaceComposerClient::getDisplayConfigs(
+        const sp<IBinder>& display, Vector<DisplayInfo>* configs)
 {
-    return ComposerService::getComposerService()->getDisplayInfo(display, info);
+    return ComposerService::getComposerService()->getDisplayConfigs(display, configs);
 }
 
-void SurfaceComposerClient::blankDisplay(const sp<IBinder>& token) {
-    ComposerService::getComposerService()->blank(token);
+status_t SurfaceComposerClient::getDisplayInfo(const sp<IBinder>& display,
+        DisplayInfo* info) {
+    Vector<DisplayInfo> configs;
+    status_t result = getDisplayConfigs(display, &configs);
+    if (result != NO_ERROR) {
+        return result;
+    }
+
+    int activeId = getActiveConfig(display);
+    if (activeId < 0) {
+        ALOGE("No active configuration found");
+        return NAME_NOT_FOUND;
+    }
+
+    *info = configs[activeId];
+    return NO_ERROR;
 }
 
-void SurfaceComposerClient::unblankDisplay(const sp<IBinder>& token) {
-    ComposerService::getComposerService()->unblank(token);
+int SurfaceComposerClient::getActiveConfig(const sp<IBinder>& display) {
+    return ComposerService::getComposerService()->getActiveConfig(display);
 }
 
-#ifndef MTK_DEFAULT_AOSP
+status_t SurfaceComposerClient::setActiveConfig(const sp<IBinder>& display, int id) {
+    return ComposerService::getComposerService()->setActiveConfig(display, id);
+}
+
+void SurfaceComposerClient::setDisplayPowerMode(const sp<IBinder>& token,
+        int mode) {
+    ComposerService::getComposerService()->setPowerMode(token, mode);
+}
+
+status_t SurfaceComposerClient::clearAnimationFrameStats() {
+    return ComposerService::getComposerService()->clearAnimationFrameStats();
+}
+
+status_t SurfaceComposerClient::getAnimationFrameStats(FrameStats* outStats) {
+    return ComposerService::getComposerService()->getAnimationFrameStats(outStats);
+}
+
+#ifdef MTK_AOSP_ENHANCEMENT
 status_t SurfaceComposerClient::getDisplayInfoEx(
         const sp<IBinder>& display, DisplayInfoEx* info)
 {
     return ComposerService::getComposerService()->getDisplayInfoEx(display, info);
 }
 #endif
-
 // ----------------------------------------------------------------------------
 
 status_t ScreenshotClient::capture(
         const sp<IBinder>& display,
         const sp<IGraphicBufferProducer>& producer,
-        uint32_t reqWidth, uint32_t reqHeight,
-        uint32_t minLayerZ, uint32_t maxLayerZ) {
+        Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
+        uint32_t minLayerZ, uint32_t maxLayerZ, bool useIdentityTransform) {
     sp<ISurfaceComposer> s(ComposerService::getComposerService());
     if (s == NULL) return NO_INIT;
-    return s->captureScreen(display, producer,
-            reqWidth, reqHeight, minLayerZ, maxLayerZ);
+    return s->captureScreen(display, producer, sourceCrop,
+            reqWidth, reqHeight, minLayerZ, maxLayerZ, useIdentityTransform);
 }
 
 ScreenshotClient::ScreenshotClient()
@@ -682,16 +718,18 @@ ScreenshotClient::~ScreenshotClient() {
 
 sp<CpuConsumer> ScreenshotClient::getCpuConsumer() const {
     if (mCpuConsumer == NULL) {
-        mBufferQueue = new BufferQueue();
-        mCpuConsumer = new CpuConsumer(mBufferQueue, 1);
+        sp<IGraphicBufferConsumer> consumer;
+        BufferQueue::createBufferQueue(&mProducer, &consumer);
+        mCpuConsumer = new CpuConsumer(consumer, 1);
         mCpuConsumer->setName(String8("ScreenshotClient"));
     }
     return mCpuConsumer;
 }
 
 status_t ScreenshotClient::update(const sp<IBinder>& display,
-        uint32_t reqWidth, uint32_t reqHeight,
-        uint32_t minLayerZ, uint32_t maxLayerZ) {
+        Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
+        uint32_t minLayerZ, uint32_t maxLayerZ,
+        bool useIdentityTransform, uint32_t rotation) {
     sp<ISurfaceComposer> s(ComposerService::getComposerService());
     if (s == NULL) return NO_INIT;
     sp<CpuConsumer> cpuConsumer = getCpuConsumer();
@@ -702,14 +740,15 @@ status_t ScreenshotClient::update(const sp<IBinder>& display,
         mHaveBuffer = false;
     }
 
-    status_t err = s->captureScreen(display, mBufferQueue,
-            reqWidth, reqHeight, minLayerZ, maxLayerZ);
+    status_t err = s->captureScreen(display, mProducer, sourceCrop,
+            reqWidth, reqHeight, minLayerZ, maxLayerZ, useIdentityTransform,
+            static_cast<ISurfaceComposer::Rotation>(rotation));
 
     if (err == NO_ERROR) {
         err = mCpuConsumer->lockNextBuffer(&mBuffer);
         if (err == NO_ERROR) {
             mHaveBuffer = true;
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
         } else {
             ALOGE("ScreenshotClient: lockNextBuffer failed: %s (%d)", strerror(-err), err);
         }
@@ -720,13 +759,25 @@ status_t ScreenshotClient::update(const sp<IBinder>& display,
     return err;
 }
 
-status_t ScreenshotClient::update(const sp<IBinder>& display) {
-    return ScreenshotClient::update(display, 0, 0, 0, -1UL);
+status_t ScreenshotClient::update(const sp<IBinder>& display,
+        Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
+        uint32_t minLayerZ, uint32_t maxLayerZ,
+        bool useIdentityTransform) {
+
+    return ScreenshotClient::update(display, sourceCrop, reqWidth, reqHeight,
+            minLayerZ, maxLayerZ, useIdentityTransform, ISurfaceComposer::eRotateNone);
 }
 
-status_t ScreenshotClient::update(const sp<IBinder>& display,
-        uint32_t reqWidth, uint32_t reqHeight) {
-    return ScreenshotClient::update(display, reqWidth, reqHeight, 0, -1UL);
+status_t ScreenshotClient::update(const sp<IBinder>& display, Rect sourceCrop,
+        bool useIdentityTransform) {
+    return ScreenshotClient::update(display, sourceCrop, 0, 0, 0, -1UL,
+            useIdentityTransform, ISurfaceComposer::eRotateNone);
+}
+
+status_t ScreenshotClient::update(const sp<IBinder>& display, Rect sourceCrop,
+        uint32_t reqWidth, uint32_t reqHeight, bool useIdentityTransform) {
+    return ScreenshotClient::update(display, sourceCrop, reqWidth, reqHeight,
+            0, -1UL, useIdentityTransform, ISurfaceComposer::eRotateNone);
 }
 
 void ScreenshotClient::release() {

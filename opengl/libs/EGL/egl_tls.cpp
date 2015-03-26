@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  ** Copyright 2011, The Android Open Source Project
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,8 +65,17 @@ const char *egl_tls_t::egl_strerror(EGLint err) {
 void egl_tls_t::validateTLSKey()
 {
     struct TlsKeyInitializer {
+        /* MTK: fix memory leakage issue. */
+        static void MTK_egl_finalizer(egl_tls_t* tls) {
+            /* Now TLS is NULL and passed as the argument of this function.
+             * We must put the TLS data back, so that eglReleaseThread can 
+             * retrive the current context and free resource properly.
+             */
+            pthread_setspecific(sKey, tls);
+            eglReleaseThread();
+        }
         static void create() {
-            pthread_key_create(&sKey, (void (*)(void*))&eglReleaseThread);
+            pthread_key_create(&sKey, (void (*)(void*))MTK_egl_finalizer);
         }
     };
     pthread_once(&sOnceKey, TlsKeyInitializer::create);

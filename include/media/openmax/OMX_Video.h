@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 /* ------------------------------------------------------------------
  * Copyright (C) 1998-2009 PacketVideo
  *
@@ -65,6 +70,10 @@ extern "C" {
 
 #include <OMX_IVCommon.h>
 
+//#ifndef ANDROID_DEFAULT_CODE
+#ifdef MTK_AOSP_ENHANCEMENT
+#include <OMX_VideoExt.h>
+#endif
 
 /**
  * Enumeration used to define the possible video compression codings.  
@@ -87,6 +96,7 @@ typedef enum OMX_VIDEO_CODINGTYPE {
     OMX_VIDEO_CodingMJPEG,      /**< Motion JPEG */
     OMX_VIDEO_CodingVP8,        /**< Google VP8, formerly known as On2 VP8 */
     OMX_VIDEO_CodingVP9,        /**< Google VP9 */
+    OMX_VIDEO_CodingHEVC,       /**< ITU H.265/HEVC */
     OMX_VIDEO_CodingKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_VIDEO_CodingVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
     OMX_VIDEO_CodingMax = 0x7FFFFFFF
@@ -579,7 +589,7 @@ typedef struct OMX_VIDEO_PARAM_MPEG2TYPE {
 	OMX_VIDEO_MPEG2LEVELTYPE eLevel;   
 } OMX_VIDEO_PARAM_MPEG2TYPE;
 
-#ifdef MTK_S3D_SUPPORT
+//#ifdef MTK_CAM_STEREO_CAMERA_SUPPORT //MTK_S3D_SUPPORT
 /**
  * Frame packing arrangement type for H.264
  * Now only support frame sequence, side-by-side and top-and-bottom
@@ -591,7 +601,7 @@ typedef enum OMX_VIDEO_H264FPATYPE {
     OMX_VIDEO_H264FPA_SIDEBYSIDE = 2,
     OMX_VIDEO_H264FPA_TOPANDBOTTOM = 3,
 } OMX_VIDEO_H264FPATYPE;
-#endif
+//#endif
 /** 
  * MPEG-4 profile types, each profile indicates support for various 
  * performance bounds and different annexes.
@@ -829,6 +839,7 @@ typedef enum OMX_VIDEO_AVCLEVELTYPE {
     OMX_VIDEO_AVCLevel42  = 0x2000,   /**< Level 4.2 */
     OMX_VIDEO_AVCLevel5   = 0x4000,   /**< Level 5 */
     OMX_VIDEO_AVCLevel51  = 0x8000,   /**< Level 5.1 */
+    OMX_VIDEO_AVCLevel52  = 0x10000,  /**< Level 5.2 */
     OMX_VIDEO_AVCLevelKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_VIDEO_AVCLevelVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
     OMX_VIDEO_AVCLevelMax = 0x7FFFFFFF  

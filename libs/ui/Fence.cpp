@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,8 +69,8 @@ status_t Fence::waitForever(const char* logname) {
     if (err < 0 && errno == ETIME) {
         ALOGE("%s: fence %d didn't signal in %u ms", logname, mFenceFd,
                 warningTimeout);
-#ifndef MTK_DEFAULT_AOSP
-        dump(mFenceFd, logname, warningTimeout);
+#ifdef MTK_AOSP_ENHANCEMENT 
+        dump(mFenceFd);
 #endif
         err = sync_wait(mFenceFd, TIMEOUT_NEVER);
     }
@@ -141,7 +146,7 @@ status_t Fence::flatten(void*& buffer, size_t& size, int*& fds, size_t& count) c
     if (size < getFlattenedSize() || count < getFdCount()) {
         return NO_MEMORY;
     }
-    FlattenableUtils::write(buffer, size, getFdCount());
+    FlattenableUtils::write(buffer, size, (uint32_t)getFdCount());
     if (isValid()) {
         *fds++ = mFenceFd;
         count--;
@@ -159,7 +164,7 @@ status_t Fence::unflatten(void const*& buffer, size_t& size, int const*& fds, si
         return NO_MEMORY;
     }
 
-    size_t numFds;
+    uint32_t numFds;
     FlattenableUtils::read(buffer, size, numFds);
 
     if (numFds > 1) {

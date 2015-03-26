@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +37,7 @@
 #include "EventThread.h"
 #include "SurfaceFlinger.h"
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 // reserve client pid infomation
 #include <binder/IPCThreadState.h>
 #include <cutils/xlog.h>
@@ -41,12 +46,21 @@
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
+// time to wait between VSYNC requests before sending a VSYNC OFF power hint: 40msec.
+const long vsyncHintOffDelay = 40000000;
+
+static void vsyncOffCallback(union sigval val) {
+    EventThread *ev = (EventThread *)val.sival_ptr;
+    ev->sendVsyncHintOff();
+    return;
+}
 
 EventThread::EventThread(const sp<VSyncSource>& src)
     : mVSyncSource(src),
       mUseSoftwareVSync(false),
       mVsyncEnabled(false),
-      mDebugVsyncEnabled(false) {
+      mDebugVsyncEnabled(false),
+      mVsyncHintSent(false) {
 
     for (int32_t i=0 ; i<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES ; i++) {
         mVSyncEvent[i].header.type = DisplayEventReceiver::DISPLAY_EVENT_VSYNC;
@@ -54,6 +68,31 @@ EventThread::EventThread(const sp<VSyncSource>& src)
         mVSyncEvent[i].header.timestamp = 0;
         mVSyncEvent[i].vsync.count =  0;
     }
+    struct sigevent se;
+    se.sigev_notify = SIGEV_THREAD;
+    se.sigev_value.sival_ptr = this;
+    se.sigev_notify_function = vsyncOffCallback;
+    se.sigev_notify_attributes = NULL;
+    timer_create(CLOCK_MONOTONIC, &se, &mTimerId);
+}
+
+void EventThread::sendVsyncHintOff() {
+    Mutex::Autolock _l(mLock);
+    mPowerHAL.vsyncHint(false);
+    mVsyncHintSent = false;
+}
+
+void EventThread::sendVsyncHintOnLocked() {
+    struct itimerspec ts;
+    if(!mVsyncHintSent) {
+        mPowerHAL.vsyncHint(true);
+        mVsyncHintSent = true;
+    }
+    ts.it_value.tv_sec = 0;
+    ts.it_value.tv_nsec = vsyncHintOffDelay;
+    ts.it_interval.tv_sec = 0;
+    ts.it_interval.tv_nsec = 0;
+    timer_settime(mTimerId, 0, &ts, NULL);
 }
 
 void EventThread::onFirstRef() {
@@ -313,17 +352,16 @@ void EventThread::enableVSyncLocked() {
             mVsyncEnabled = true;
             mVSyncSource->setCallback(static_cast<VSyncSource::Callback*>(this));
             mVSyncSource->setVSyncEnabled(true);
-            mPowerHAL.vsyncHint(true);
         }
     }
     mDebugVsyncEnabled = true;
+    sendVsyncHintOnLocked();
 }
 
 void EventThread::disableVSyncLocked() {
     if (mVsyncEnabled) {
         mVsyncEnabled = false;
         mVSyncSource->setVSyncEnabled(false);
-        mPowerHAL.vsyncHint(false);
         mDebugVsyncEnabled = false;
     }
 }
@@ -334,7 +372,7 @@ void EventThread::dump(String8& result) const {
             mDebugVsyncEnabled?"enabled":"disabled");
     result.appendFormat("  soft-vsync: %s\n",
             mUseSoftwareVSync?"enabled":"disabled");
-    result.appendFormat("  numListeners=%u,\n  events-delivered: %u\n",
+    result.appendFormat("  numListeners=%zu,\n  events-delivered: %u\n",
             mDisplayEventConnections.size(),
             mVSyncEvent[DisplayDevice::DISPLAY_PRIMARY].vsync.count);
     for (size_t i=0 ; i<mDisplayEventConnections.size() ; i++) {
@@ -351,7 +389,7 @@ EventThread::Connection::Connection(
         const sp<EventThread>& eventThread)
     : count(-1), mEventThread(eventThread), mChannel(new BitTube())
 {
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     // reserve client pid infomation
     pid = IPCThreadState::self()->getCallingPid();
     XLOGI("EventThread Client Pid (%d) created", pid);
@@ -362,7 +400,7 @@ EventThread::Connection::~Connection() {
     // do nothing here -- clean-up will happen automatically
     // when the main thread wakes up
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     // reserve client pid infomation
     XLOGI("EventThread Client Pid (%d) disconnected by (%d)", pid, getpid());
 #endif
@@ -378,7 +416,7 @@ sp<BitTube> EventThread::Connection::getDataChannel() const {
 }
 
 void EventThread::Connection::setVsyncRate(uint32_t count) {
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 #ifndef MTK_USER_BUILD
     XLOGD("setVsyncRate(%d, c=%d)", pid, count);
 #endif
@@ -387,7 +425,7 @@ void EventThread::Connection::setVsyncRate(uint32_t count) {
 }
 
 void EventThread::Connection::requestNextVsync() {
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 #ifndef MTK_USER_BUILD
     XLOGD("requestNextVsync(%d)", pid);
 #endif
@@ -397,7 +435,7 @@ void EventThread::Connection::requestNextVsync() {
 
 status_t EventThread::Connection::postEvent(
         const DisplayEventReceiver::Event& event) {
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 #ifndef MTK_USER_BUILD
     if (event.header.type == DisplayEventReceiver::DISPLAY_EVENT_VSYNC)
         XLOGD("postEvent(%d, v/c=%d)", pid, event.vsync.count);

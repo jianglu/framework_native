@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  ** Copyright 2007, The Android Open Source Project
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -204,7 +209,7 @@ EGLDisplay eglGetDisplay(EGLNativeDisplayType display)
 {
     clearError();
 
-    uint32_t index = uint32_t(display);
+    uintptr_t index = reinterpret_cast<uintptr_t>(display);
     if (index >= NUM_DISPLAYS) {
         return setError(EGL_BAD_PARAMETER, EGL_NO_DISPLAY);
     }
@@ -408,9 +413,11 @@ EGLSurface eglCreateWindowSurface(  EGLDisplay dpy, EGLConfig config,
     if (dp) {
         EGLDisplay iDpy = dp->disp.dpy;
 
-        if (native_window_api_connect(window, NATIVE_WINDOW_API_EGL) != OK) {
-            ALOGE("EGLNativeWindowType %p already connected to another API",
-                    window);
+        int result = native_window_api_connect(window, NATIVE_WINDOW_API_EGL);
+        if (result != OK) {
+            ALOGE("eglCreateWindowSurface: native_window_api_connect (win=%p) "
+                    "failed (%#x) (already connected to another API?)",
+                    window, result);
             return setError(EGL_BAD_ALLOC, EGL_NO_SURFACE);
         }
 
@@ -595,7 +602,7 @@ EGLBoolean eglQuerySurface( EGLDisplay dpy, EGLSurface surface,
 }
 
 void EGLAPI eglBeginFrame(EGLDisplay dpy, EGLSurface surface) {
-    ATRACE_CALL_PERF();
+    ATRACE_CALL();
     clearError();
 
     const egl_display_ptr dp = validate_display(dpy);
@@ -773,6 +780,20 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
         // this will ALOGE the error
         egl_connection_t* const cnx = &gEGLImpl;
         result = setError(cnx->egl.eglGetError(), EGL_FALSE);
+
+        // MTK {{{{
+        if (NULL != cur_c)
+        {
+            SurfaceRef _cur_r(get_surface(cur_c->read));
+            SurfaceRef _cur_d(get_surface(cur_c->draw));
+            
+            cur_c->read = EGL_NO_SURFACE;
+            cur_c->draw = EGL_NO_SURFACE;
+
+            _cur_r.release();
+            _cur_d.release();
+        }
+        // MTK }}}}
     }
     return result;
 }
@@ -877,10 +898,13 @@ EGLint eglGetError(void)
     return err;
 }
 
-static __eglMustCastToProperFunctionPointerType findBuiltinGLWrapper(
+static __eglMustCastToProperFunctionPointerType findBuiltinWrapper(
         const char* procname) {
     const egl_connection_t* cnx = &gEGLImpl;
     void* proc = NULL;
+
+    proc = dlsym(cnx->libEgl, procname);
+    if (proc) return (__eglMustCastToProperFunctionPointerType)proc;
 
     proc = dlsym(cnx->libGles2, procname);
     if (proc) return (__eglMustCastToProperFunctionPointerType)proc;
@@ -912,7 +936,7 @@ __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname)
     addr = findProcAddress(procname, sExtensionMap, NELEM(sExtensionMap));
     if (addr) return addr;
 
-    addr = findBuiltinGLWrapper(procname);
+    addr = findBuiltinWrapper(procname);
     if (addr) return addr;
 
     // this protects accesses to sGLExtentionMap and sGLExtentionSlot
@@ -987,12 +1011,12 @@ public:
         }
         {
             Mutex::Autolock lock(thread->mMutex);
-            ScopedTrace st(ATRACE_TAG|ATRACE_TAG_PERF, String8::format("kicked off frame %d",
+            ScopedTrace st(ATRACE_TAG, String8::format("kicked off frame %d",
                     thread->mFramesQueued).string());
             thread->mQueue.push_back(sync);
             thread->mCondition.signal();
             thread->mFramesQueued++;
-            ATRACE_INT_PERF("GPU Frames Outstanding", thread->mQueue.size());
+            ATRACE_INT("GPU Frames Outstanding", thread->mQueue.size());
         }
     }
 
@@ -1012,7 +1036,7 @@ private:
         }
         EGLDisplay dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         {
-            ScopedTrace st(ATRACE_TAG|ATRACE_TAG_PERF, String8::format("waiting for frame %d",
+            ScopedTrace st(ATRACE_TAG, String8::format("waiting for frame %d",
                     frameNum).string());
             EGLint result = eglClientWaitSyncKHR(dpy, sync, 0, EGL_FOREVER_KHR);
             if (result == EGL_FALSE) {
@@ -1026,7 +1050,7 @@ private:
             Mutex::Autolock lock(mMutex);
             mQueue.removeAt(0);
             mFramesCompleted++;
-            ATRACE_INT_PERF("GPU Frames Outstanding", mQueue.size());
+            ATRACE_INT("GPU Frames Outstanding", mQueue.size());
         }
         return true;
     }
@@ -1040,7 +1064,7 @@ private:
 
 EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw)
 {
-    ATRACE_CALL_PERF();
+    ATRACE_CALL();
     clearError();
 
     const egl_display_ptr dp = validate_display(dpy);
@@ -1094,66 +1118,6 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface draw)
             // glReadPixels() ensures that the frame is complete
             s->cnx->hooks[c->version]->gl.glReadPixels(0,0,1,1,
                     GL_RGBA,GL_UNSIGNED_BYTE,&pixel);
-        }
-    }
-
-    if (CC_UNLIKELY(dp->finishOnSwap))
-    {
-        char buffer[PROPERTY_VALUE_MAX];
-        int  value;
-
-        memset(buffer, 0x0, sizeof(buffer));
-        property_get("debug.gpu.dumpoutput.enable", buffer, "0");
-        value = atoi(buffer);
-        if (1 == value)
-        {
-            static int32_t count = 0;
-            void           *pPixel;
-            int32_t        width;
-            int32_t        height;
-            char           name[64];
-            FILE           *pFile;
-
-            egl_context_t * const c = get_context( egl_tls_t::getContext() );
-            if (c)
-            {
-                s->cnx->egl.eglQuerySurface(
-                    dp->disp.dpy, s->surface, EGL_WIDTH, &width);
-
-                s->cnx->egl.eglQuerySurface(
-                    dp->disp.dpy, s->surface, EGL_HEIGHT, &height);
-            
-                pPixel = (void*)malloc(width * height * 4);
-                if (NULL != pPixel)
-                {
-                    s->cnx->hooks[c->version]->gl.glReadPixels(0, 0, width, height,
-                        GL_RGBA,GL_UNSIGNED_BYTE, pPixel);
-           
-                    sprintf(name, "/data/gpu_dump/gpuout%d_%d_w%d_h%d_s%d.raw\0", count, getpid(), width, height, 4);
-                    count++;
-
-                    pFile = fopen(name, "wb");
-                    if (NULL != pFile)
-                    {
-                        fwrite(pPixel, 1, width * height * 4, pFile);
-                        fclose(pFile);
-                    }
-                    else
-                    {
-                        ALOGE("EGL: Can't open file for dump output\n");
-                    }
-
-                    free(pPixel);
-                }
-                else
-                {
-                    ALOGE("EGL: Can't malloc temp buffer for dump output\n");
-                }
-            }    
-            else
-            {
-                ALOGE("EGL: Can't get context for dump output\n");  
-            }
         }
     }
 

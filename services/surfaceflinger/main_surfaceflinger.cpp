@@ -25,52 +25,9 @@
 #include <binder/IServiceManager.h>
 #include "SurfaceFlinger.h"
 
-#ifndef MTK_DEFAULT_AOSP
-#include <private/android_filesystem_config.h>
-#include <linux/rtpm_prio.h>
-#include <sys/prctl.h>
-#include <sys/capability.h>
-#include <cutils/xlog.h>
-#endif
-
 using namespace android;
 
-int main(int argc, char** argv) {
-#ifndef MTK_DEFAULT_AOSP
-    if (AID_ROOT == getuid()) {
-        XLOGI("[%s] set surfaceflinger is in root user, adjust caps for its thread", __func__);
-        if (-1 == prctl(PR_SET_KEEPCAPS, 1, 0, 0)) {
-            XLOGW("    prctl failed: %s", strerror(errno));
-        } else {
-            __user_cap_header_struct hdr;
-            __user_cap_data_struct data;
-
-            hdr.version = _LINUX_CAPABILITY_VERSION;    // set caps
-            hdr.pid = 0;
-            data.effective = ((1 << CAP_SYS_NICE) | (1 << CAP_SETUID) | (1 << CAP_SETGID));
-            data.permitted = ((1 << CAP_SYS_NICE) | (1 << CAP_SETUID) | (1 << CAP_SETGID));
-            data.inheritable = 0xffffffff;
-            if (-1 == capset(&hdr, &data)) {
-                XLOGW("    cap setting failed, %s", strerror(errno));
-            }
-
-            setgid(AID_SYSTEM);
-            setuid(AID_SYSTEM);         // change user to system
-
-            hdr.version = _LINUX_CAPABILITY_VERSION;    // set caps again
-            hdr.pid = 0;
-            data.effective = (1 << CAP_SYS_NICE);
-	        data.permitted = (1 << CAP_SYS_NICE);
-            data.inheritable = 0xffffffff;
-            if (-1 == capset(&hdr, &data)) {
-                XLOGW("    cap re-setting failed, %s", strerror(errno));
-            }
-        }
-    } else {
-        XLOGI("[%s] surfaceflinger is not in root user", __func__);
-    }
-#endif
-
+int main(int, char**) {
     // When SF is launched in its own process, limit the number of
     // binder threads to 4.
     ProcessState::self()->setThreadPoolMaxThreadCount(4);

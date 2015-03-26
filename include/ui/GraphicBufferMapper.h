@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,6 +54,14 @@ public:
             int usage, const Rect& bounds, android_ycbcr *ycbcr);
 
     status_t unlock(buffer_handle_t handle);
+
+    status_t lockAsync(buffer_handle_t handle,
+            int usage, const Rect& bounds, void** vaddr, int fenceFd);
+
+    status_t lockAsyncYCbCr(buffer_handle_t handle,
+            int usage, const Rect& bounds, android_ycbcr *ycbcr, int fenceFd);
+
+    status_t unlockAsync(buffer_handle_t handle, int *fenceFd);
     
     // dumps information about the mapping of this handle
     void dump(buffer_handle_t handle);
@@ -58,7 +71,7 @@ private:
     GraphicBufferMapper();
     gralloc_module_t const *mAllocMod;
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT 
 private:
     bool mIsDumpCallStack;
 #endif

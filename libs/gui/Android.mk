@@ -5,8 +5,13 @@ LOCAL_SRC_FILES:= \
 	IGraphicBufferConsumer.cpp \
 	IConsumerListener.cpp \
 	BitTube.cpp \
+	BufferItem.cpp \
 	BufferItemConsumer.cpp \
 	BufferQueue.cpp \
+	BufferQueueConsumer.cpp \
+	BufferQueueCore.cpp \
+	BufferQueueProducer.cpp \
+	BufferSlot.cpp \
 	ConsumerBase.cpp \
 	CpuConsumer.cpp \
 	DisplayEventReceiver.cpp \
@@ -16,6 +21,7 @@ LOCAL_SRC_FILES:= \
 	IDisplayEventConnection.cpp \
 	IGraphicBufferAlloc.cpp \
 	IGraphicBufferProducer.cpp \
+	IProducerListener.cpp \
 	ISensorEventConnection.cpp \
 	ISensorServer.cpp \
 	ISurfaceComposer.cpp \
@@ -24,6 +30,7 @@ LOCAL_SRC_FILES:= \
 	Sensor.cpp \
 	SensorEventQueue.cpp \
 	SensorManager.cpp \
+	StreamSplitter.cpp \
 	Surface.cpp \
 	SurfaceControl.cpp \
 	SurfaceComposerClient.cpp \
@@ -40,23 +47,33 @@ LOCAL_SHARED_LIBRARIES := \
 	liblog
 
 # --- MediaTek -------------------------------------------------------------------------------------
-MTK_PATH = ../../../../$(MTK_ROOT)/frameworks-ext/native/libs/gui
+MTK_PATH = mediatek
 
-LOCAL_SRC_FILES += \
-	$(MTK_PATH)/BufferQueue.cpp \
-	$(MTK_PATH)/FpsCounter.cpp
+ifneq (, $(findstring MTK_AOSP_ENHANCEMENT, $(COMMON_GLOBAL_CPPFLAGS)))
+	LOCAL_SRC_FILES += \
+		$(MTK_PATH)/BufferQueueDump.cpp \
+		$(MTK_PATH)/BufferQueueDebug.cpp \
+		$(MTK_PATH)/BufferQueueMonitor.cpp
+endif
+
+LOCAL_C_INCLUDES += \
+	hardware/libhardware/include \
+	$(TOP)/$(MTK_ROOT)/hardware/gralloc_extra/include \
+	$(TOP)/$(MTK_ROOT)/hardware/include \
+	$(TOP)/$(MTK_ROOT)/hardware/ui_ext/inc
 
 LOCAL_CFLAGS := -DLOG_TAG=\"GLConsumer\"
 
-ifeq ($(MTK_DP_FRAMEWORK), yes)
-	LOCAL_CFLAGS += -DUSE_DP
-	LOCAL_SHARED_LIBRARIES += libdpframework libhardware
-	LOCAL_STATIC_LIBRARIES += libgralloc_extra
-	LOCAL_SRC_FILES += $(MTK_PATH)/BufferQueueDump.cpp
-	LOCAL_C_INCLUDES += \
-		$(TOP)/$(MTK_ROOT)/hardware/dpframework/inc \
-		$(TOP)/$(MTK_ROOT)/hardware/gralloc_extra/include
-endif # MTK_DP_FRAMEWORK
+LOCAL_SHARED_LIBRARIES += \
+	libdl \
+	libhardware \
+	libui_ext \
+	libgralloc_extra \
+	libselinux
+
+ifeq ($(MTK_EMULATOR_SUPPORT), yes)
+	LOCAL_CFLAGS += -DMTK_EMULATOR_SUPPORT
+endif # MTK_EMULATOR_SUPPORT
 # --------------------------------------------------------------------------------------------------
 
 LOCAL_MODULE:= libgui

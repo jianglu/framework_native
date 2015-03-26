@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +19,25 @@
  * limitations under the License.
  */
 
+#ifdef MTK_AOSP_ENHANCEMENT
+#define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#endif
+
 // #define LOG_NDEBUG 0
 #include "VirtualDisplaySurface.h"
 #include "HWComposer.h"
+
+#ifdef MTK_AOSP_ENHANCEMENT
+#include <utils/Trace.h>
+#include "gralloc_mtk_defs.h"
+
+#define ATRACE_BUFFER_INDEX(name, index)                                        \
+    if (ATRACE_ENABLED()) {                                                     \
+        char ___traceBuf[256];                                                  \
+        snprintf(___traceBuf, sizeof(___traceBuf), "%s: %d", (name), (index));  \
+        android::ScopedTrace ___bufTracer(ATRACE_TAG, ___traceBuf);             \
+    }
+#endif
 
 // ---------------------------------------------------------------------------
 namespace android {
@@ -28,11 +49,11 @@ static const bool sForceHwcCopy = true;
 static const bool sForceHwcCopy = false;
 #endif
 
-#define VDS_LOGE(msg, ...) ALOGE("[%s] "msg, \
+#define VDS_LOGE(msg, ...) ALOGE("[%s] " msg, \
         mDisplayName.string(), ##__VA_ARGS__)
-#define VDS_LOGW_IF(cond, msg, ...) ALOGW_IF(cond, "[%s] "msg, \
+#define VDS_LOGW_IF(cond, msg, ...) ALOGW_IF(cond, "[%s] " msg, \
         mDisplayName.string(), ##__VA_ARGS__)
-#define VDS_LOGV(msg, ...) ALOGV("[%s] "msg, \
+#define VDS_LOGV(msg, ...) ALOGV("[%s] " msg, \
         mDisplayName.string(), ##__VA_ARGS__)
 
 static const char* dbgCompositionTypeStr(DisplaySurface::CompositionType type) {
@@ -47,25 +68,29 @@ static const char* dbgCompositionTypeStr(DisplaySurface::CompositionType type) {
 
 VirtualDisplaySurface::VirtualDisplaySurface(HWComposer& hwc, int32_t dispId,
         const sp<IGraphicBufferProducer>& sink,
-        const sp<BufferQueue>& bq,
+        const sp<IGraphicBufferProducer>& bqProducer,
+        const sp<IGraphicBufferConsumer>& bqConsumer,
         const String8& name)
-:   ConsumerBase(bq),
+:   ConsumerBase(bqConsumer),
     mHwc(hwc),
     mDisplayId(dispId),
     mDisplayName(name),
     mOutputUsage(GRALLOC_USAGE_HW_COMPOSER),
     mProducerSlotSource(0),
     mDbgState(DBG_STATE_IDLE),
-    mDbgLastCompositionType(COMPOSITION_UNKNOWN)
+    mDbgLastCompositionType(COMPOSITION_UNKNOWN),
+    mMustRecompose(false)
 {
     mSource[SOURCE_SINK] = sink;
-    mSource[SOURCE_SCRATCH] = bq;
+    mSource[SOURCE_SCRATCH] = bqProducer;
 
     resetPerFrameState();
 
     int sinkWidth, sinkHeight;
     sink->query(NATIVE_WINDOW_WIDTH, &sinkWidth);
     sink->query(NATIVE_WINDOW_HEIGHT, &sinkHeight);
+    mSinkBufferWidth = sinkWidth;
+    mSinkBufferHeight = sinkHeight;
 
     // Pick the buffer format to request from the sink when not rendering to it
     // with GLES. If the consumer needs CPU access, use the default format
@@ -87,22 +112,30 @@ VirtualDisplaySurface::VirtualDisplaySurface(HWComposer& hwc, int32_t dispId,
     mConsumer->setConsumerUsageBits(GRALLOC_USAGE_HW_COMPOSER);
     mConsumer->setDefaultBufferSize(sinkWidth, sinkHeight);
     mConsumer->setDefaultMaxBufferCount(2);
+#ifdef MTK_AOSP_ENHANCEMENT
+    mWifiDisplay = (sinkUsage & GRALLOC_USAGE_WIFIDISPLAY);
+#endif
 }
 
 VirtualDisplaySurface::~VirtualDisplaySurface() {
 }
 
-status_t VirtualDisplaySurface::beginFrame() {
+status_t VirtualDisplaySurface::beginFrame(bool mustRecompose) {
     if (mDisplayId < 0)
         return NO_ERROR;
+
+    mMustRecompose = mustRecompose;
+
+#ifdef MTK_AOSP_ENHANCEMENT
+    if (!mHwc.mustRecompose(mDisplayId))
+        return NO_ERROR;
+
+    ATRACE_CALL();
+#endif
 
     VDS_LOGW_IF(mDbgState != DBG_STATE_IDLE,
             "Unexpected beginFrame() in %s state", dbgStateStr());
     mDbgState = DBG_STATE_BEGUN;
-
-    uint32_t transformHint, numPendingBuffers;
-    mQueueBufferOutput.deflate(&mSinkBufferWidth, &mSinkBufferHeight,
-            &transformHint, &numPendingBuffers);
 
     return refreshOutputBuffer();
 }
@@ -110,6 +143,10 @@ status_t VirtualDisplaySurface::beginFrame() {
 status_t VirtualDisplaySurface::prepareFrame(CompositionType compositionType) {
     if (mDisplayId < 0)
         return NO_ERROR;
+
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
 
     VDS_LOGW_IF(mDbgState != DBG_STATE_BEGUN,
             "Unexpected prepareFrame() in %s state", dbgStateStr());
@@ -163,6 +200,10 @@ status_t VirtualDisplaySurface::advanceFrame() {
     if (mDisplayId < 0)
         return NO_ERROR;
 
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
+
     if (mCompositionType == COMPOSITION_HWC) {
         VDS_LOGW_IF(mDbgState != DBG_STATE_PREPARED,
                 "Unexpected advanceFrame() in %s state on HWC frame",
@@ -208,6 +249,10 @@ void VirtualDisplaySurface::onFrameCommitted() {
     if (mDisplayId < 0)
         return;
 
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
+
     VDS_LOGW_IF(mDbgState != DBG_STATE_HWC,
             "Unexpected onFrameCommitted() in %s state", dbgStateStr());
     mDbgState = DBG_STATE_IDLE;
@@ -228,27 +273,60 @@ void VirtualDisplaySurface::onFrameCommitted() {
         QueueBufferOutput qbo;
         sp<Fence> outFence = mHwc.getLastRetireFence(mDisplayId);
         VDS_LOGV("onFrameCommitted: queue sink sslot=%d", sslot);
-        status_t result = mSource[SOURCE_SINK]->queueBuffer(sslot,
-                QueueBufferInput(
-                    systemTime(), false /* isAutoTimestamp */,
-                    Rect(mSinkBufferWidth, mSinkBufferHeight),
-                    NATIVE_WINDOW_SCALING_MODE_FREEZE, 0 /* transform */,
-                    true /* async*/,
-                    outFence),
-                &qbo);
-        if (result == NO_ERROR) {
-            updateQueueBufferOutput(qbo);
+        if (mMustRecompose) {
+            status_t result = mSource[SOURCE_SINK]->queueBuffer(sslot,
+                    QueueBufferInput(
+                        systemTime(), false /* isAutoTimestamp */,
+                        Rect(mSinkBufferWidth, mSinkBufferHeight),
+                        NATIVE_WINDOW_SCALING_MODE_FREEZE, 0 /* transform */,
+#ifdef MTK_AOSP_ENHANCEMENT
+                        !mWifiDisplay,
+#else
+                        true /* async*/,
+#endif
+                        outFence),
+                    &qbo);
+            if (result == NO_ERROR) {
+                updateQueueBufferOutput(qbo);
+#ifdef MTK_AOSP_ENHANCEMENT
+                ATRACE_BUFFER_INDEX("queueBuffer", sslot);
+#endif
+            }
+        } else {
+            // If the surface hadn't actually been updated, then we only went
+            // through the motions of updating the display to keep our state
+            // machine happy. We cancel the buffer to avoid triggering another
+            // re-composition and causing an infinite loop.
+            mSource[SOURCE_SINK]->cancelBuffer(sslot, outFence);
+#ifdef MTK_AOSP_ENHANCEMENT
+            ATRACE_BUFFER_INDEX("cancelBuffer", sslot);
+#endif
         }
     }
 
     resetPerFrameState();
 }
 
-void VirtualDisplaySurface::dump(String8& result) const {
+void VirtualDisplaySurface::dump(String8& /* result */) const {
+}
+
+void VirtualDisplaySurface::resizeBuffers(const uint32_t w, const uint32_t h) {
+    uint32_t tmpW, tmpH, transformHint, numPendingBuffers;
+    mQueueBufferOutput.deflate(&tmpW, &tmpH, &transformHint, &numPendingBuffers);
+    mQueueBufferOutput.inflate(w, h, transformHint, numPendingBuffers);
+
+    mSinkBufferWidth = w;
+    mSinkBufferHeight = h;
 }
 
 status_t VirtualDisplaySurface::requestBuffer(int pslot,
         sp<GraphicBuffer>* outBuf) {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_BUFFER_INDEX("requestBuffer", pslot);
+#endif
+    if (mDisplayId < 0)
+        return mSource[SOURCE_SINK]->requestBuffer(pslot, outBuf);
+
     VDS_LOGW_IF(mDbgState != DBG_STATE_GLES,
             "Unexpected requestBuffer pslot=%d in %s state",
             pslot, dbgStateStr());
@@ -263,6 +341,7 @@ status_t VirtualDisplaySurface::setBufferCount(int bufferCount) {
 
 status_t VirtualDisplaySurface::dequeueBuffer(Source source,
         uint32_t format, uint32_t usage, int* sslot, sp<Fence>* fence) {
+    LOG_FATAL_IF(mDisplayId < 0, "mDisplayId=%d but should not be < 0.", mDisplayId);
     // Don't let a slow consumer block us
     bool async = (source == SOURCE_SINK);
 
@@ -273,24 +352,32 @@ status_t VirtualDisplaySurface::dequeueBuffer(Source source,
     int pslot = mapSource2ProducerSlot(source, *sslot);
     VDS_LOGV("dequeueBuffer(%s): sslot=%d pslot=%d result=%d",
             dbgSourceStr(source), *sslot, pslot, result);
-    uint32_t sourceBit = static_cast<uint32_t>(source) << pslot;
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_BUFFER_INDEX("dequeueBuffer", *sslot);
+#endif
+    uint64_t sourceBit = static_cast<uint64_t>(source) << pslot;
 
-    if ((mProducerSlotSource & (1u << pslot)) != sourceBit) {
+    if ((mProducerSlotSource & (1ULL << pslot)) != sourceBit) {
         // This slot was previously dequeued from the other source; must
         // re-request the buffer.
         result |= BUFFER_NEEDS_REALLOCATION;
-        mProducerSlotSource &= ~(1u << pslot);
+        mProducerSlotSource &= ~(1ULL << pslot);
         mProducerSlotSource |= sourceBit;
     }
 
     if (result & RELEASE_ALL_BUFFERS) {
         for (uint32_t i = 0; i < BufferQueue::NUM_BUFFER_SLOTS; i++) {
-            if ((mProducerSlotSource & (1u << i)) == sourceBit)
+            if ((mProducerSlotSource & (1ULL << i)) == sourceBit)
                 mProducerBuffers[i].clear();
         }
     }
     if (result & BUFFER_NEEDS_REALLOCATION) {
-        mSource[source]->requestBuffer(*sslot, &mProducerBuffers[pslot]);
+        result = mSource[source]->requestBuffer(*sslot, &mProducerBuffers[pslot]);
+        if (result < 0) {
+            mProducerBuffers[pslot].clear();
+            mSource[source]->cancelBuffer(*sslot, *fence);
+            return result;
+        }
         VDS_LOGV("dequeueBuffer(%s): buffers[%d]=%p fmt=%d usage=%#x",
                 dbgSourceStr(source), pslot, mProducerBuffers[pslot].get(),
                 mProducerBuffers[pslot]->getPixelFormat(),
@@ -302,6 +389,17 @@ status_t VirtualDisplaySurface::dequeueBuffer(Source source,
 
 status_t VirtualDisplaySurface::dequeueBuffer(int* pslot, sp<Fence>* fence, bool async,
         uint32_t w, uint32_t h, uint32_t format, uint32_t usage) {
+#ifdef MTK_AOSP_ENHANCEMENT
+    if (mDisplayId < 0) {
+        status_t result = mSource[SOURCE_SINK]->dequeueBuffer(pslot, fence, async, w, h, format, usage);
+        ATRACE_BUFFER_INDEX("dequeueBuffer", *pslot);
+        return result;
+    }
+#else
+    if (mDisplayId < 0)
+        return mSource[SOURCE_SINK]->dequeueBuffer(pslot, fence, async, w, h, format, usage);
+#endif
+
     VDS_LOGW_IF(mDbgState != DBG_STATE_PREPARED,
             "Unexpected dequeueBuffer() in %s state", dbgStateStr());
     mDbgState = DBG_STATE_GLES;
@@ -363,8 +461,28 @@ status_t VirtualDisplaySurface::dequeueBuffer(int* pslot, sp<Fence>* fence, bool
     return result;
 }
 
+status_t VirtualDisplaySurface::detachBuffer(int /* slot */) {
+    VDS_LOGE("detachBuffer is not available for VirtualDisplaySurface");
+    return INVALID_OPERATION;
+}
+
+status_t VirtualDisplaySurface::detachNextBuffer(
+        sp<GraphicBuffer>* /* outBuffer */, sp<Fence>* /* outFence */) {
+    VDS_LOGE("detachNextBuffer is not available for VirtualDisplaySurface");
+    return INVALID_OPERATION;
+}
+
+status_t VirtualDisplaySurface::attachBuffer(int* /* outSlot */,
+        const sp<GraphicBuffer>& /* buffer */) {
+    VDS_LOGE("attachBuffer is not available for VirtualDisplaySurface");
+    return INVALID_OPERATION;
+}
+
 status_t VirtualDisplaySurface::queueBuffer(int pslot,
         const QueueBufferInput& input, QueueBufferOutput* output) {
+    if (mDisplayId < 0)
+        return mSource[SOURCE_SINK]->queueBuffer(pslot, input, output);
+
     VDS_LOGW_IF(mDbgState != DBG_STATE_GLES,
             "Unexpected queueBuffer(pslot=%d) in %s state", pslot,
             dbgStateStr());
@@ -418,6 +536,9 @@ status_t VirtualDisplaySurface::queueBuffer(int pslot,
 }
 
 void VirtualDisplaySurface::cancelBuffer(int pslot, const sp<Fence>& fence) {
+    if (mDisplayId < 0)
+        return mSource[SOURCE_SINK]->cancelBuffer(mapProducer2SourceSlot(SOURCE_SINK, pslot), fence);
+
     VDS_LOGW_IF(mDbgState != DBG_STATE_GLES,
             "Unexpected cancelBuffer(pslot=%d) in %s state", pslot,
             dbgStateStr());
@@ -428,14 +549,28 @@ void VirtualDisplaySurface::cancelBuffer(int pslot, const sp<Fence>& fence) {
 }
 
 int VirtualDisplaySurface::query(int what, int* value) {
-    return mSource[SOURCE_SINK]->query(what, value);
+    switch (what) {
+        case NATIVE_WINDOW_WIDTH:
+            *value = mSinkBufferWidth;
+            break;
+        case NATIVE_WINDOW_HEIGHT:
+            *value = mSinkBufferHeight;
+            break;
+        default:
+            return mSource[SOURCE_SINK]->query(what, value);
+    }
+    return NO_ERROR;
 }
 
-status_t VirtualDisplaySurface::connect(const sp<IBinder>& token,
+status_t VirtualDisplaySurface::connect(const sp<IProducerListener>& listener,
         int api, bool producerControlledByApp,
         QueueBufferOutput* output) {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
     QueueBufferOutput qbo;
-    status_t result = mSource[SOURCE_SINK]->connect(token, api, producerControlledByApp, &qbo);
+    status_t result = mSource[SOURCE_SINK]->connect(listener, api,
+            producerControlledByApp, &qbo);
     if (result == NO_ERROR) {
         updateQueueBufferOutput(qbo);
         *output = mQueueBufferOutput;
@@ -444,7 +579,20 @@ status_t VirtualDisplaySurface::connect(const sp<IBinder>& token,
 }
 
 status_t VirtualDisplaySurface::disconnect(int api) {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
     return mSource[SOURCE_SINK]->disconnect(api);
+}
+
+status_t VirtualDisplaySurface::setSidebandStream(const sp<NativeHandle>& /*stream*/) {
+    return INVALID_OPERATION;
+}
+
+void VirtualDisplaySurface::allocateBuffers(bool /* async */,
+        uint32_t /* width */, uint32_t /* height */, uint32_t /* format */,
+        uint32_t /* usage */) {
+    // TODO: Should we actually allocate buffers for a virtual display?
 }
 
 void VirtualDisplaySurface::updateQueueBufferOutput(
@@ -456,17 +604,23 @@ void VirtualDisplaySurface::updateQueueBufferOutput(
 
 void VirtualDisplaySurface::resetPerFrameState() {
     mCompositionType = COMPOSITION_UNKNOWN;
-    mSinkBufferWidth = 0;
-    mSinkBufferHeight = 0;
+    mFbFence = Fence::NO_FENCE;
     mOutputFence = Fence::NO_FENCE;
     mOutputProducerSlot = -1;
+    mFbProducerSlot = -1;
 }
 
 status_t VirtualDisplaySurface::refreshOutputBuffer() {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL();
+#endif
     if (mOutputProducerSlot >= 0) {
         mSource[SOURCE_SINK]->cancelBuffer(
                 mapProducer2SourceSlot(SOURCE_SINK, mOutputProducerSlot),
                 mOutputFence);
+#ifdef MTK_AOSP_ENHANCEMENT
+        ATRACE_BUFFER_INDEX("cancelBuffer", mOutputProducerSlot);
+#endif
     }
 
     int sslot;
@@ -474,6 +628,9 @@ status_t VirtualDisplaySurface::refreshOutputBuffer() {
             &sslot, &mOutputFence);
     if (result < 0)
         return result;
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_BUFFER_INDEX("dequeueBuffer", sslot);
+#endif
     mOutputProducerSlot = mapSource2ProducerSlot(SOURCE_SINK, sslot);
 
     // On GLES-only frames, we don't have the right output buffer acquire fence

@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,7 +69,7 @@ class EventThread : public Thread, private VSyncSource::Callback {
         // count ==-1 : one-shot event that fired this round / disabled
         int32_t count;
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
         // reserve client pid infomation
         int32_t pid;
 #endif
@@ -102,6 +107,7 @@ public:
             DisplayEventReceiver::Event* event);
 
     void dump(String8& result) const;
+    void sendVsyncHintOff();
 
 private:
     virtual bool        threadLoop();
@@ -112,6 +118,7 @@ private:
     void removeDisplayEventConnection(const wp<Connection>& connection);
     void enableVSyncLocked();
     void disableVSyncLocked();
+    void sendVsyncHintOnLocked();
 
     // constants
     sp<VSyncSource> mVSyncSource;
@@ -129,6 +136,9 @@ private:
 
     // for debugging
     bool mDebugVsyncEnabled;
+
+    bool mVsyncHintSent;
+    timer_t mTimerId;
 };
 
 // ---------------------------------------------------------------------------

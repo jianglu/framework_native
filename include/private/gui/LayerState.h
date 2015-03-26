@@ -30,17 +30,15 @@ namespace android {
 class Parcel;
 class ISurfaceComposerClient;
 
-#ifndef MTK_DEFAULT_AOSP
-// declare IGraphicBufferProducer to avoid build fail
-class IBinder;
-class IGraphicBufferProducer;
-#endif
-
+/*
+ * Used to communicate layer information between SurfaceFlinger and its clients.
+ */
 struct layer_state_t {
 
 
     enum {
-        eLayerHidden        = 0x01,
+        eLayerHidden        = 0x01,     // SURFACE_HIDDEN in SurfaceControl.java
+        eLayerOpaque        = 0x02,     // SURFACE_OPAQUE
     };
 
     enum {
@@ -53,53 +51,8 @@ struct layer_state_t {
         eVisibilityChanged          = 0x00000040,
         eLayerStackChanged          = 0x00000080,
         eCropChanged                = 0x00000100,
+        eOpacityChanged             = 0x00000200,
     };
-
-#ifndef MTK_DEFAULT_AOSP
-    // ENUMs for flagsEx values.
-    // These value MUST be the same as defined in java domain code (in WindowManager.java)
-    enum {
-        eExInvalid           = 0x80000000,   // as need to update
-
-        // BYTE#3 LOW4 for PQ control
-        eExPQ_Mask           = 0x01000000,   // for PQ on/off
-        eExPQ_On             = 0x01000000,
-
-        eExPQ_Reserved_Mask  = 0x0E000000,   // reserved
-        eExPQ_Reserved_bit0  = 0x02000000,
-        eExPQ_Reserved_bit1  = 0x04000000,
-        eExPQ_Reserved_bit2  = 0x08000000,
-
-        // BYTE#2 for S3D layer control
-        eExS3D_Mask          = 0x00FF0000,
-
-        eExS3D_Layout_Mask   = 0x00F00000,   // for content layout
-        eExS3D_Unknown       = 0x00100000,
-        eExS3D_SideBySide    = 0x00200000,
-        eExS3D_TopAndBottom  = 0x00400000,
-        eExS3D_LRSwapped     = 0x00800000,
-
-        eExS3D_Display_Mask  = 0x00080000,   // for display mode
-        eExS3D_2D            = 0x00000000,
-        eExS3D_3D            = 0x00080000,
-
-        eExS3D_Offset_Mask   = 0x00030000,   // for video offest adjustment
-        eExS3D_NoGIA         = 0x00010000,
-        eExS3D_NoMargin      = 0x00020000,
-
-        eExS3D_Reserved_Mask = 0x00040000,   // reserved
-        eExS3D_ReservedBit_2 = 0x00040000,
-
-        // BYTE#1 no use now
-
-        // BYTE#0 for S3D manual offset value settings
-        eExS3D_OffsetManualValue_Mask = 0x000000FF,
-        eExS3D_OffsetManualValue_Zero = 0x0000007F,
-
-        // for layer init
-        eExInitValue = (eExS3D_Unknown | eExS3D_OffsetManualValue_Zero),
-    };
-#endif
 
     layer_state_t()
         :   what(0),
@@ -110,12 +63,6 @@ struct layer_state_t {
         matrix.dsdx = matrix.dtdy = 1.0f;
         matrix.dsdy = matrix.dtdx = 0.0f;
         crop.makeInvalid();
-
-#ifndef MTK_DEFAULT_AOSP
-        // For setting extra surface flags
-        flagsEx = 0x00000000;
-        maskEx = 0x00000000;
-#endif
     }
 
     status_t    write(Parcel& output) const;
@@ -141,11 +88,6 @@ struct layer_state_t {
             uint8_t         reserved;
             matrix22_t      matrix;
             Rect            crop;
-#ifndef MTK_DEFAULT_AOSP
-            // For setting extra surface flags
-            uint32_t        flagsEx;
-            uint32_t        maskEx;
-#endif
             // non POD must be last. see write/read
             Region          transparentRegion;
 };
@@ -171,7 +113,8 @@ struct DisplayState {
     enum {
         eSurfaceChanged             = 0x01,
         eLayerStackChanged          = 0x02,
-        eDisplayProjectionChanged   = 0x04
+        eDisplayProjectionChanged   = 0x04,
+        eDisplaySizeChanged         = 0x08
     };
 
     uint32_t what;
@@ -181,6 +124,7 @@ struct DisplayState {
     uint32_t orientation;
     Rect viewport;
     Rect frame;
+    uint32_t width, height;
     status_t write(Parcel& output) const;
     status_t read(const Parcel& input);
 };

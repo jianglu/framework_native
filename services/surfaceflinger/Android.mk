@@ -1,6 +1,9 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
+LOCAL_CLANG := true
+
+LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
 LOCAL_SRC_FILES:= \
     Client.cpp \
     DisplayDevice.cpp \
@@ -11,9 +14,9 @@ LOCAL_SRC_FILES:= \
     Layer.cpp \
     LayerDim.cpp \
     MessageQueue.cpp \
+    MonitoredProducer.cpp \
     SurfaceFlinger.cpp \
     SurfaceFlingerConsumer.cpp \
-    SurfaceTextureLayer.cpp \
     Transform.cpp \
     DisplayHardware/FramebufferSurface.cpp \
     DisplayHardware/HWComposer.cpp \
@@ -37,9 +40,6 @@ LOCAL_SRC_FILES:= \
 LOCAL_CFLAGS:= -DLOG_TAG=\"SurfaceFlinger\"
 LOCAL_CFLAGS += -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES
 
-ifeq ($(TARGET_BOARD_PLATFORM),omap3)
-	LOCAL_CFLAGS += -DNO_RGBX_8888
-endif
 ifeq ($(TARGET_BOARD_PLATFORM),omap4)
 	LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
 endif
@@ -83,7 +83,8 @@ else
     LOCAL_CFLAGS += -DPRESENT_TIME_OFFSET_FROM_VSYNC_NS=0
 endif
 
-LOCAL_CFLAGS += -fvisibility=hidden
+LOCAL_CFLAGS += -fvisibility=hidden -Werror=format
+LOCAL_CFLAGS += -std=c++11
 
 LOCAL_SHARED_LIBRARIES := \
 	libcutils \
@@ -96,58 +97,54 @@ LOCAL_SHARED_LIBRARIES := \
 	libGLESv2 \
 	libbinder \
 	libui \
-	libgui
+	libgui \
+	libpowermanager
 
 # --- MediaTek ---------------------------------------------------------------
-MTK_PATH = ../../../../$(MTK_ROOT)/frameworks-ext/native/services/surfaceflinger
-
-LOCAL_SRC_FILES += \
-	$(MTK_PATH)/Layer.cpp \
-	$(MTK_PATH)/DisplayDevice.cpp \
-	$(MTK_PATH)/SurfaceFlinger.cpp \
-	$(MTK_PATH)/SurfaceTextureLayer.cpp \
-	$(MTK_PATH)/DisplayHardware/HWComposer.cpp \
-	$(MTK_PATH)/RenderEngine/RenderEngine.cpp \
-	$(MTK_PATH)/RenderEngine/GLES11RenderEngine.cpp \
-	$(MTK_PATH)/RenderEngine/GLES20RenderEngine.cpp \
-	$(MTK_PATH)/SurfaceFlingerWatchDog.cpp
+ifneq (, $(findstring MTK_AOSP_ENHANCEMENT, $(COMMON_GLOBAL_CPPFLAGS)))
+	LOCAL_SRC_FILES += \
+		mediatek/DisplayDevice.cpp \
+		mediatek/SurfaceFlinger.cpp \
+		mediatek/DisplayHardware/HWComposer.cpp \
+		mediatek/RenderEngine/RenderEngine.cpp \
+		mediatek/RenderEngine/GLES11RenderEngine.cpp \
+		mediatek/RenderEngine/GLES20RenderEngine.cpp \
+		mediatek/SurfaceFlingerWatchDog.cpp
+endif
 
 ifneq ($(strip $(TARGET_BUILD_VARIANT)), eng)
 	LOCAL_CFLAGS += -DMTK_USER_BUILD
 endif
 
 ifeq ($(MTK_EMULATOR_SUPPORT), yes)
-	LOCAL_CFLAGS += -DEMULATOR_SUPPORT
+	LOCAL_CFLAGS += -DMTK_EMULATOR_SUPPORT
 endif
 
-ifneq ($(MTK_TABLET_HARDWARE), )
-	MTK_HWC_CHIP = $(shell echo $(MTK_TABLET_HARDWARE) | tr A-Z a-z )
-else
-	MTK_HWC_CHIP = $(shell echo $(MTK_PLATFORM) | tr A-Z a-z )
-endif
-
-ifeq ($(MTK_HWC_SUPPORT), yes)
-	LOCAL_REQUIRED_MODULES += hwcomposer.$(MTK_HWC_CHIP)
-endif
-
-ifeq ($(MTK_TRIPLE_FRAMEBUFFER_SUPPORT),yes)
-	LOCAL_CFLAGS += -DNUM_FRAMEBUFFER_SURFACE_BUFFERS=3
-endif
-
-ifeq ($(MTK_DX_HDCP_SUPPORT), yes)
-	LOCAL_CFLAGS += -DMTK_DX_HDCP_SUPPORT
+ifeq ($(HAVE_AEE_FEATURE), yes)
+	LOCAL_CFLAGS += -DHAVE_AEE_FEATURE
+	LOCAL_SHARED_LIBRARIES += libaed
 endif
 
 LOCAL_REQUIRED_MODULES += \
 	drm_disable_icon.png
 
 LOCAL_SHARED_LIBRARIES += \
-	libskia
+	libskia \
+	libui_ext \
+	libselinux
 
-LOCAL_C_INCLUDES := \
+LOCAL_C_INCLUDES += \
+	$(TOP)/$(MTK_ROOT)/hardware/include \
+	$(TOP)/$(MTK_ROOT)/hardware/ui_ext/inc \
 	$(TOP)/$(MTK_ROOT)/hardware/gralloc_extra/include \
+	$(TOP)/$(MTK_ROOT)/external/aee/binary/inc \
 	external/skia/include/core \
 	external/skia/include/lazy
+
+ifneq ($(MTK_EMULATOR_SUPPORT), yes)
+LOCAL_STATIC_LIBRARIES += \
+	libsurfaceflinger_mediatek
+endif
 # ----------------------------------------------------------------------------
 
 LOCAL_MODULE:= libsurfaceflinger
@@ -161,7 +158,7 @@ include $(CLEAR_VARS)
 LOCAL_CFLAGS:= -DLOG_TAG=\"SurfaceFlinger\"
 
 LOCAL_SRC_FILES:= \
-	main_surfaceflinger.cpp 
+	main_surfaceflinger.cpp
 
 LOCAL_SHARED_LIBRARIES := \
 	libsurfaceflinger \
@@ -172,10 +169,15 @@ LOCAL_SHARED_LIBRARIES := \
 
 # --- MediaTek ---------------------------------------------------------------
 LOCAL_C_INCLUDES := \
-	$(TOP)/$(MTK_ROOT)/kernel/include \
+    $(TOP)/$(MTK_ROOT)/hardware/include \
+	$(TOP)/$(MTK_ROOT)/hardware/ui_ext/inc
 # ----------------------------------------------------------------------------
 
 LOCAL_MODULE:= surfaceflinger
+
+ifdef TARGET_32_BIT_SURFACEFLINGER
+LOCAL_32_BIT_ONLY := true
+endif
 
 include $(BUILD_EXECUTABLE)
 

@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 /* ------------------------------------------------------------------
  * Copyright (C) 1998-2009 PacketVideo
  *
@@ -410,17 +415,13 @@ typedef struct OMX_PARAM_COMPONENTROLETYPE {
 #define OMX_BUFFERFLAG_CODECCONFIG 0x00000080
 
 // for 3D stereo
-#ifdef MTK_S3D_SUPPORT
+#if 0 //def MTK_S3D_SUPPORT
 #define OMX_BUFFERFLAG_3D_SIDEBYSIDE   0x00000200
 #define OMX_BUFFERFLAG_3D_TOPANDBOTTOM 0x00000400
 #define OMX_BUFFERFLAG_2D              0x00001000
 #endif
 //
 
-#ifndef ANDROID_DEFAULT_CODE
-// for ACodec color convert
-#define OMX_ACODEC_COLOR_CONVERT 0x01000000
-#endif //ANDROID_DEFAULT_CODE
 /** @ingroup buf */
 typedef struct OMX_BUFFERHEADERTYPE
 {
@@ -502,7 +503,8 @@ typedef struct OMX_PORT_PARAM_TYPE {
     OMX_U32 nStartPortNumber;   /** first port number for this type of port */
 } OMX_PORT_PARAM_TYPE; 
 
-#ifndef ANDROID_DEFAULT_CODE
+//#ifndef ANDROID_DEFAULT_CODE
+#ifdef MTK_AOSP_ENHANCEMENT
 /** @ingroup comp */
 typedef struct OMX_MTK_PLATFORM_PRIVATE {
     OMX_U32 mM4UMVABufferPa;

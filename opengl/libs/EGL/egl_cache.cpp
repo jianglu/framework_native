@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  ** Copyright 2011, The Android Open Source Project
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -242,7 +247,10 @@ void egl_cache_t::saveBlobCacheLocked() {
             }
         }
 
-        size_t fileSize = headerSize + cacheSize;
+        /// size_t fileSize = headerSize + cacheSize; 
+        /// [MTK]add extra 4bytes to avoid possible buffer overflow issue
+        /// Here ever detected 1 bytes overflow issue by memory debug tool        
+        size_t fileSize = headerSize + cacheSize + 4; 
 
         uint8_t* buf = new uint8_t [fileSize];
         if (!buf) {

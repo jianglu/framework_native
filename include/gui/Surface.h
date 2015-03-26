@@ -78,6 +78,29 @@ public:
         return surface != NULL && surface->getIGraphicBufferProducer() != NULL;
     }
 
+    /* Attaches a sideband buffer stream to the Surface's IGraphicBufferProducer.
+     *
+     * A sideband stream is a device-specific mechanism for passing buffers
+     * from the producer to the consumer without using dequeueBuffer/
+     * queueBuffer. If a sideband stream is present, the consumer can choose
+     * whether to acquire buffers from the sideband stream or from the queued
+     * buffers.
+     *
+     * Passing NULL or a different stream handle will detach the previous
+     * handle if any.
+     */
+    void setSidebandStream(const sp<NativeHandle>& stream);
+
+    /* Allocates buffers based on the current dimensions/format.
+     *
+     * This function will allocate up to the maximum number of buffers
+     * permitted by the current BufferQueue configuration. It will use the
+     * default format and dimensions. This is most useful to avoid an allocation
+     * delay during dequeueBuffer. If there are already the maximum number of
+     * buffers allocated, this function has no effect.
+     */
+    void allocateBuffers();
+
 protected:
     virtual ~Surface();
 
@@ -115,12 +138,14 @@ private:
     int dispatchSetBuffersFormat(va_list args);
     int dispatchSetScalingMode(va_list args);
     int dispatchSetBuffersTransform(va_list args);
+    int dispatchSetBuffersStickyTransform(va_list args);
     int dispatchSetBuffersTimestamp(va_list args);
     int dispatchSetCrop(va_list args);
     int dispatchSetPostTransformCrop(va_list args);
     int dispatchSetUsage(va_list args);
     int dispatchLock(va_list args);
     int dispatchUnlockAndPost(va_list args);
+    int dispatchSetSidebandStream(va_list args);
 
 protected:
     virtual int dequeueBuffer(ANativeWindowBuffer** buffer, int* fenceFd);
@@ -140,6 +165,7 @@ protected:
     virtual int setBuffersFormat(int format);
     virtual int setScalingMode(int mode);
     virtual int setBuffersTransform(int transform);
+    virtual int setBuffersStickyTransform(int transform);
     virtual int setBuffersTimestamp(int64_t timestamp);
     virtual int setCrop(Rect const* rect);
     virtual int setUsage(uint32_t reqUsage);
@@ -207,6 +233,12 @@ private:
     // mTransform is the transform identifier that will be used for the next
     // buffer that gets queued. It is set by calling setTransform.
     uint32_t mTransform;
+
+    // mStickyTransform is a transform that is applied on top of mTransform
+    // in each buffer that is queued.  This is typically used to force the
+    // compositor to apply a transform, and will prevent the transform hint
+    // from being set by the compositor.
+    uint32_t mStickyTransform;
 
      // mDefaultWidth is default width of the buffers, regardless of the
      // native_window_set_buffers_dimensions call.

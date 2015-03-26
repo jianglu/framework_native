@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  ** Copyright 2007, The Android Open Source Project
  **
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,8 +192,18 @@ void* Loader::open(egl_connection_t* cnx)
 
     LOG_ALWAYS_FATAL_IF(!hnd, "couldn't find an OpenGL ES implementation");
 
+#if defined(__LP64__)
+    cnx->libEgl   = load_wrapper("/system/lib64/libEGL.so");
+    cnx->libGles2 = load_wrapper("/system/lib64/libGLESv2.so");
+    cnx->libGles1 = load_wrapper("/system/lib64/libGLESv1_CM.so");
+#else
+    cnx->libEgl   = load_wrapper("/system/lib/libEGL.so");
     cnx->libGles2 = load_wrapper("/system/lib/libGLESv2.so");
     cnx->libGles1 = load_wrapper("/system/lib/libGLESv1_CM.so");
+#endif
+    LOG_ALWAYS_FATAL_IF(!cnx->libEgl,
+            "couldn't load system EGL wrapper libraries");
+
     LOG_ALWAYS_FATAL_IF(!cnx->libGles2 || !cnx->libGles1,
             "couldn't load system OpenGL ES wrapper libraries");
 
@@ -268,8 +283,13 @@ void *Loader::load_driver(const char* kind,
             String8 pattern;
             pattern.appendFormat("lib%s", kind);
             const char* const searchPaths[] = {
+#if defined(__LP64__)
+                    "/vendor/lib64/egl",
+                    "/system/lib64/egl"
+#else
                     "/vendor/lib/egl",
                     "/system/lib/egl"
+#endif
             };
 
             // first, we search for the exact name of the GLES userspace
@@ -284,6 +304,51 @@ void *Loader::load_driver(const char* kind,
                 }
             }
 
+#ifndef MTK_DEFAULT_AOSP
+            /* JB loading mechanism by loading egl.cfg BEGIN */
+            ALOGD("Attempt to load from egl.cfg");
+            FILE* cfg = fopen("/system/lib/egl/egl.cfg", "r");
+            if (cfg == NULL) 
+            {
+                // default config
+                ALOGD("egl.cfg not found, using default config");
+                // fallback to KK default path
+            } 
+            else 
+            {
+                char line[256];                
+                char tag[256];
+                while (fgets(line, 256, cfg)) 
+                {
+                    int dpy, impl;
+                    if (sscanf(line, "%u %u %s", &dpy, &impl, tag) == 3) {
+                        ALOGD(">>> %u %u %s", dpy, impl, tag);
+                        
+                    }
+                }
+                fclose(cfg);
+                
+                // We only load the h/w accelerated implementation               
+                if (strcmp(tag,"android"))
+                {
+                    // we look for files that match:
+                    //      libGLES_<tag>.so, or:
+                    //      libEGL_<tag>.so, libGLESv1_CM_<tag>.so, libGLESv2_<tag>.so
+                    
+                    pattern.append("_");
+                    pattern.append(tag);
+                    for (size_t i=0 ; i<NELEM(searchPaths) ; i++) {
+                        if (find(result, pattern, searchPaths[i], false)) {
+                            return result;
+                        }
+                    }
+                }
+                else
+                    ALOGD("h/w acceleration implementation from egl.cfg not found, using KK method");
+            }
+            /* JB loading mechanism by loading egl.cfg END */
+#endif 
+            
             // for compatibility with the old "egl.cfg" naming convention
             // we look for files that match:
             //      libGLES_*.so, or:
@@ -310,7 +375,11 @@ void *Loader::load_driver(const char* kind,
             if (checkGlesEmulationStatus() == 0) {
                 ALOGD("Emulator without GPU support detected. "
                       "Fallback to software renderer.");
+#if defined(__LP64__)
+                result.setTo("/system/lib64/egl/libGLES_android.so");
+#else
                 result.setTo("/system/lib/egl/libGLES_android.so");
+#endif
                 return true;
             }
 

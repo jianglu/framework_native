@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,11 +39,15 @@ public:
         virtual ~LayerDim();
 
     virtual const char* getTypeId() const { return "LayerDim"; }
-    virtual void onDraw(const sp<const DisplayDevice>& hw, const Region& clip) const;
+    virtual void onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
+            bool useIdentityTransform) const;
     virtual bool isOpaque() const         { return false; }
     virtual bool isSecure() const         { return false; }
     virtual bool isFixedSize() const      { return true; }
     virtual bool isVisible() const;
+#ifdef MTK_AOSP_ENHANCEMENT
+    virtual bool isDim() const { return true; }
+#endif
 };
 
 // ---------------------------------------------------------------------------

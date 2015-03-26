@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 /* ------------------------------------------------------------------
  * Copyright (C) 1998-2009 PacketVideo
  *
@@ -107,9 +112,9 @@ typedef enum OMX_AUDIO_CODINGTYPE {
     OMX_AUDIO_CodingRA,          /**< Any variant of RA encoded data */
     OMX_AUDIO_CodingMIDI,        /**< Any variant of MIDI encoded data */
     OMX_AUDIO_CodingFLAC,        /**< Any variant of FLAC encoded data */
-#ifdef MTK_AUDIO_DDPLUS_SUPPORT
-    OMX_AUDIO_CodingDDP,         /**< Any variant of DDP encoded data */
-#endif // DOLBY_UDC
+//#ifdef MTK_AUDIO_DDPLUS_SUPPORT
+//    OMX_AUDIO_CodingDDP,         /**< Any variant of DDP encoded data */
+//#endif // DOLBY_UDC
     OMX_AUDIO_CodingKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_AUDIO_CodingVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
     OMX_AUDIO_CodingMax = 0x7FFFFFFF
@@ -281,6 +286,7 @@ typedef enum OMX_AUDIO_AACPROFILETYPE{
 #define OMX_AUDIO_AACToolTNS  0x00000004 /**< TNS: Temporal Noise Shaping tool allowed or active */
 #define OMX_AUDIO_AACToolPNS  0x00000008 /**< PNS: MPEG-4 Perceptual Noise substitution tool allowed or active */
 #define OMX_AUDIO_AACToolLTP  0x00000010 /**< LTP: MPEG-4 Long Term Prediction tool allowed or active */
+#define OMX_AUDIO_AACToolVendor 0x00010000 /**< NOT A KHRONOS VALUE, offset for vendor-specific additions */
 #define OMX_AUDIO_AACToolAll  0x7FFFFFFF /**< all AAC tools allowed or active (*/
 
 /** MPEG-4 AAC error resilience (ER) tool usage (for nAACERtools in OMX_AUDIO_PARAM_AACPROFILETYPE).

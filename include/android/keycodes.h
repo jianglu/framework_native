@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2010 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -266,15 +271,51 @@ enum {
     AKEYCODE_BRIGHTNESS_DOWN = 220,
     AKEYCODE_BRIGHTNESS_UP   = 221,
     AKEYCODE_MEDIA_AUDIO_TRACK = 222,
+    AKEYCODE_SLEEP           = 223,
+    AKEYCODE_WAKEUP          = 224,
+    AKEYCODE_PAIRING         = 225,
+    AKEYCODE_MEDIA_TOP_MENU  = 226,
+    AKEYCODE_11              = 227,
+    AKEYCODE_12              = 228,
+    AKEYCODE_LAST_CHANNEL    = 229,
+    AKEYCODE_TV_DATA_SERVICE = 230,
+    AKEYCODE_VOICE_ASSIST    = 231,
+    AKEYCODE_TV_RADIO_SERVICE = 232,
+    AKEYCODE_TV_TELETEXT     = 233,
+    AKEYCODE_TV_NUMBER_ENTRY = 234,
+    AKEYCODE_TV_TERRESTRIAL_ANALOG = 235,
+    AKEYCODE_TV_TERRESTRIAL_DIGITAL = 236,
+    AKEYCODE_TV_SATELLITE    = 237,
+    AKEYCODE_TV_SATELLITE_BS = 238,
+    AKEYCODE_TV_SATELLITE_CS = 239,
+    AKEYCODE_TV_SATELLITE_SERVICE = 240,
+    AKEYCODE_TV_NETWORK      = 241,
+    AKEYCODE_TV_ANTENNA_CABLE = 242,
+    AKEYCODE_TV_INPUT_HDMI_1 = 243,
+    AKEYCODE_TV_INPUT_HDMI_2 = 244,
+    AKEYCODE_TV_INPUT_HDMI_3 = 245,
+    AKEYCODE_TV_INPUT_HDMI_4 = 246,
+    AKEYCODE_TV_INPUT_COMPOSITE_1 = 247,
+    AKEYCODE_TV_INPUT_COMPOSITE_2 = 248,
+    AKEYCODE_TV_INPUT_COMPONENT_1 = 249,
+    AKEYCODE_TV_INPUT_COMPONENT_2 = 250,
+    AKEYCODE_TV_INPUT_VGA_1  = 251,
+    AKEYCODE_TV_AUDIO_DESCRIPTION = 252,
+    AKEYCODE_TV_AUDIO_DESCRIPTION_MIX_UP = 253,
+    AKEYCODE_TV_AUDIO_DESCRIPTION_MIX_DOWN = 254,
+    AKEYCODE_TV_ZOOM_MODE    = 255,
+    AKEYCODE_TV_CONTENTS_MENU = 256,
+    AKEYCODE_TV_MEDIA_CONTEXT_MENU = 257,
+    AKEYCODE_TV_TIMER_PROGRAMMING = 258,
+    AKEYCODE_HELP            = 259,
     /// M:[SmartBook]Special key @{
-    AKEYCODE_WIFI_TOGGLE     = 223,
-    AKEYCODE_BT_TOGGLE       = 224,
-    AKEYCODE_LOCK_TOGGLE     = 225,
-    AKEYCODE_IME_TOGGLE      = 226,
-    AKEYCODE_MESSAGING       = 227,
-    AKEYCODE_GALLERY         = 228,
+    AKEYCODE_WIFI_TOGGLE     = 260,
+    AKEYCODE_BT_TOGGLE       = 261,
+    AKEYCODE_LOCK_TOGGLE     = 262,
+    AKEYCODE_IME_TOGGLE      = 263,
+    AKEYCODE_MESSAGING       = 264,
+    AKEYCODE_GALLERY         = 265
     /// @}
-
 
     // NOTE: If you add a new keycode here you must also add it to several other files.
     //       Refer to frameworks/base/core/java/android/view/KeyEvent.java for the full list.

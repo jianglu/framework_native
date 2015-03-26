@@ -1,3 +1,8 @@
+/*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
 //
 // Copyright 2010 The Android Open Source Project
 //
@@ -22,6 +27,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <math.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -303,15 +309,32 @@ status_t InputPublisher::publishMotionEvent(
         float yPrecision,
         nsecs_t downTime,
         nsecs_t eventTime,
-        size_t pointerCount,
+        uint32_t pointerCount,
         const PointerProperties* pointerProperties,
         const PointerCoords* pointerCoords) {
+    /** M: MET_publish milestone. @{ */
+    {
+        char buff[256];
+        /* print window name*/
+        snprintf(buff, sizeof(buff), "MET_publish_name: %s",mChannel->getName().string());
+        ScopedTrace _publish_name(ATRACE_TAG_INPUT, buff);
+
+        /* print publish event*/
+        snprintf(buff, sizeof(buff), "MET_publish: %llx,%d,%x,%x",
+            eventTime,
+            action,
+            (int)pointerCoords[0].getAxisValue(AMOTION_EVENT_AXIS_X),
+            (int)pointerCoords[0].getAxisValue(AMOTION_EVENT_AXIS_Y));
+        ScopedTrace _publish_action(ATRACE_TAG_INPUT, buff);
+    }
+    /** @} */ 
+
 #if DEBUG_TRANSPORT_ACTIONS
     ALOGD("channel '%s' publisher ~ publishMotionEvent: seq=%u, deviceId=%d, source=0x%x, "
             "action=0x%x, flags=0x%x, edgeFlags=0x%x, metaState=0x%x, buttonState=0x%x, "
             "xOffset=%f, yOffset=%f, "
             "xPrecision=%f, yPrecision=%f, downTime=%lld, eventTime=%lld, "
-            "pointerCount=%d",
+            "pointerCount=%" PRIu32,
             mChannel->getName().string(), seq,
             deviceId, source, action, flags, edgeFlags, metaState, buttonState,
             xOffset, yOffset, xPrecision, yPrecision, downTime, eventTime, pointerCount);
@@ -323,7 +346,7 @@ status_t InputPublisher::publishMotionEvent(
     }
 
     if (pointerCount > MAX_POINTERS || pointerCount < 1) {
-        ALOGE("channel '%s' publisher ~ Invalid number of pointers provided: %d.",
+        ALOGE("channel '%s' publisher ~ Invalid number of pointers provided: %" PRIu32 ".",
                 mChannel->getName().string(), pointerCount);
         return BAD_VALUE;
     }
@@ -345,16 +368,18 @@ status_t InputPublisher::publishMotionEvent(
     msg.body.motion.downTime = downTime;
     msg.body.motion.eventTime = eventTime;
     msg.body.motion.pointerCount = pointerCount;
-    for (size_t i = 0; i < pointerCount; i++) {
+    for (uint32_t i = 0; i < pointerCount; i++) {
         msg.body.motion.pointers[i].properties.copyFrom(pointerProperties[i]);
         msg.body.motion.pointers[i].coords.copyFrom(pointerCoords[i]);
         
         /// M: input systrace @{
-        char buffer[50];
-        sprintf(buffer, "pub_x : %d, pub_y : %d, seq=%u", 
-            (int)pointerCoords[i].getX(), (int)pointerCoords[i].getY(), seq);
-        ATRACE_BEGIN(buffer);
-        ATRACE_END();
+        if (ATRACE_ENABLED()) {
+            char buffer[50];
+            sprintf(buffer, "pub_x : %d, pub_y : %d, seq=%u", 
+                (int)pointerCoords[i].getX(), (int)pointerCoords[i].getY(), seq);
+            ATRACE_BEGIN(buffer);
+            ATRACE_END();
+        }
         /// @}
     }
     return mChannel->sendMessage(&msg);
@@ -673,7 +698,7 @@ void InputConsumer::updateTouchState(InputMessage* msg) {
 }
 
 void InputConsumer::rewriteMessage(const TouchState& state, InputMessage* msg) {
-    for (size_t i = 0; i < msg->body.motion.pointerCount; i++) {
+    for (uint32_t i = 0; i < msg->body.motion.pointerCount; i++) {
         uint32_t id = msg->body.motion.pointers[i].properties.id;
         if (state.lastResample.idBits.hasBit(id)) {
             PointerCoords& msgCoords = msg->body.motion.pointers[i].coords;
@@ -798,6 +823,15 @@ void InputConsumer::resampleTouchState(nsecs_t sampleTime, MotionEvent* event,
                     otherCoords.getX(), otherCoords.getY(),
                     alpha);
 #endif
+            /** M: MET_resample milestone. @{ */
+            char buff[256];
+            snprintf(buff, sizeof(buff), "MET_resample: %lld, %lld, %0.6f, %0.6f", sampleTime, 
+                other->eventTime, otherCoords.getX(), otherCoords.getY());
+            ScopedTrace _resample1(ATRACE_TAG_INPUT, buff);
+            snprintf(buff, sizeof(buff), "MET_resample: %lld, %lld, %0.6f, %0.6f", sampleTime, 
+                current->eventTime, currentCoords.getX(), currentCoords.getY());
+            ScopedTrace _resample2(ATRACE_TAG_INPUT, buff);
+            /** @} @*/
         } else {
             resampledCoords.copyFrom(currentCoords);
 #if DEBUG_RESAMPLING
@@ -805,6 +839,12 @@ void InputConsumer::resampleTouchState(nsecs_t sampleTime, MotionEvent* event,
                     id, resampledCoords.getX(), resampledCoords.getY(),
                     currentCoords.getX(), currentCoords.getY());
 #endif
+            /** M: MET_resample milestone. @{ */
+            char buff[256];
+            snprintf(buff, sizeof(buff), "MET_resample: %lld, %lld, %0.6f, %0.6f", sampleTime, 
+                current->eventTime, currentCoords.getX(), currentCoords.getY());
+            ScopedTrace _resample(ATRACE_TAG_INPUT, buff);
+            /** @} @*/
         }
     }
 
@@ -867,11 +907,13 @@ status_t InputConsumer::sendUnchainedFinishedSignal(uint32_t seq, bool handled) 
     msg.body.finished.seq = seq;
     msg.body.finished.handled = handled;
     /// M: input systrace  @{
-    char buffer[50];
-    sprintf(buffer, "finish seq = %d, handled=%s", seq,
-        handled ? "true" : "false");
-    ATRACE_BEGIN(buffer);
-    ATRACE_END();
+    if (ATRACE_ENABLED()) {
+        char buffer[50];
+        sprintf(buffer, "finish seq = %d, handled=%s", seq,
+            handled ? "true" : "false");
+        ATRACE_BEGIN(buffer);
+        ATRACE_END();
+    }
     /// @}
     return mChannel->sendMessage(&msg);
 }
@@ -920,10 +962,10 @@ void InputConsumer::initializeKeyEvent(KeyEvent* event, const InputMessage* msg)
 }
 
 void InputConsumer::initializeMotionEvent(MotionEvent* event, const InputMessage* msg) {
-    size_t pointerCount = msg->body.motion.pointerCount;
+    uint32_t pointerCount = msg->body.motion.pointerCount;
     PointerProperties pointerProperties[pointerCount];
     PointerCoords pointerCoords[pointerCount];
-    for (size_t i = 0; i < pointerCount; i++) {
+    for (uint32_t i = 0; i < pointerCount; i++) {
         pointerProperties[i].copyFrom(msg->body.motion.pointers[i].properties);
         pointerCoords[i].copyFrom(msg->body.motion.pointers[i].coords);
     }
@@ -948,9 +990,9 @@ void InputConsumer::initializeMotionEvent(MotionEvent* event, const InputMessage
 }
 
 void InputConsumer::addSample(MotionEvent* event, const InputMessage* msg) {
-    size_t pointerCount = msg->body.motion.pointerCount;
+    uint32_t pointerCount = msg->body.motion.pointerCount;
     PointerCoords pointerCoords[pointerCount];
-    for (size_t i = 0; i < pointerCount; i++) {
+    for (uint32_t i = 0; i < pointerCount; i++) {
         pointerCoords[i].copyFrom(msg->body.motion.pointers[i].coords);
     }
 
@@ -960,7 +1002,7 @@ void InputConsumer::addSample(MotionEvent* event, const InputMessage* msg) {
 
 bool InputConsumer::canAddSample(const Batch& batch, const InputMessage *msg) {
     const InputMessage& head = batch.samples.itemAt(0);
-    size_t pointerCount = msg->body.motion.pointerCount;
+    uint32_t pointerCount = msg->body.motion.pointerCount;
     if (head.body.motion.pointerCount != pointerCount
             || head.body.motion.action != msg->body.motion.action) {
         return false;

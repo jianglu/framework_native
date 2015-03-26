@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2010 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,6 +37,10 @@
 #include <utils/Timers.h>
 #include <utils/Vector.h>
 
+#ifdef MTK_AOSP_ENHANCEMENT
+#include <hwc_priv.h>
+#endif
+
 extern "C" int clock_nanosleep(clockid_t clock_id, int flags,
                            const struct timespec *request,
                            struct timespec *remain);
@@ -45,9 +54,10 @@ struct framebuffer_device_t;
 namespace android {
 // ---------------------------------------------------------------------------
 
-class GraphicBuffer;
 class Fence;
 class FloatRect;
+class GraphicBuffer;
+class NativeHandle;
 class Region;
 class String8;
 class SurfaceFlinger;
@@ -96,11 +106,11 @@ public:
     // commits the list
     status_t commit();
 
-    // release hardware resources and blank screen
-    status_t release(int disp);
+    // set power mode
+    status_t setPowerMode(int disp, int mode);
 
-    // acquire hardware resources and unblank screen
-    status_t acquire(int disp);
+    // set active config
+    status_t setActiveConfig(int disp, int mode);
 
     // reset state when an external, non-virtual display is disconnected
     void disconnectDisplay(int disp);
@@ -141,7 +151,9 @@ public:
     // signal when the h/w composer is completely finished with the frame.
     // For physical displays, it is no longer being displayed. For virtual
     // displays, writes to the output buffer are complete.
-    sp<Fence> getLastRetireFence(int32_t id);
+    sp<Fence> getLastRetireFence(int32_t id) const;
+
+    status_t setCursorPositionAsync(int32_t id, const Rect &pos);
 
     /*
      * Interface to hardware composer's layers functionality.
@@ -159,17 +171,19 @@ public:
         virtual sp<Fence> getAndResetReleaseFence() = 0;
         virtual void setDefaultState() = 0;
         virtual void setSkip(bool skip) = 0;
+        virtual void setIsCursorLayerHint(bool isCursor = true) = 0;
         virtual void setBlending(uint32_t blending) = 0;
         virtual void setTransform(uint32_t transform) = 0;
         virtual void setFrame(const Rect& frame) = 0;
         virtual void setCrop(const FloatRect& crop) = 0;
         virtual void setVisibleRegionScreen(const Region& reg) = 0;
+        virtual void setSidebandStream(const sp<NativeHandle>& stream) = 0;
         virtual void setBuffer(const sp<GraphicBuffer>& buffer) = 0;
         virtual void setAcquireFenceFd(int fenceFd) = 0;
         virtual void setPlaneAlpha(uint8_t alpha) = 0;
         virtual void onDisplayed() = 0;
-#ifndef MTK_DEFAULT_AOSP
-        virtual void setDirty(bool dirty) = 0;
+#ifdef MTK_AOSP_ENHANCEMENT
+        virtual void setDim(bool dim) = 0;
 #endif
     };
 
@@ -248,17 +262,31 @@ public:
 
     void eventControl(int disp, int event, int enabled);
 
+    struct DisplayConfig {
+        uint32_t width;
+        uint32_t height;
+        float xdpi;
+        float ydpi;
+        nsecs_t refresh;
+    };
+
     // Query display parameters.  Pass in a display index (e.g.
     // HWC_DISPLAY_PRIMARY).
-    nsecs_t getRefreshPeriod(int disp) const;
     nsecs_t getRefreshTimestamp(int disp) const;
     sp<Fence> getDisplayFence(int disp) const;
+    uint32_t getFormat(int disp) const;
+    bool isConnected(int disp) const;
+
+    // These return the values for the current config of a given display index.
+    // To get the values for all configs, use getConfigs below.
     uint32_t getWidth(int disp) const;
     uint32_t getHeight(int disp) const;
-    uint32_t getFormat(int disp) const;
     float getDpiX(int disp) const;
     float getDpiY(int disp) const;
-    bool isConnected(int disp) const;
+    nsecs_t getRefreshPeriod(int disp) const;
+
+    const Vector<DisplayConfig>& getConfigs(int disp) const;
+    size_t getCurrentConfig(int disp) const;
 
     status_t setVirtualDisplayProperties(int32_t id, uint32_t w, uint32_t h,
             uint32_t format);
@@ -277,7 +305,7 @@ public:
     public:
         VSyncThread(HWComposer& hwc);
         void setEnabled(bool enabled);
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
         // 20120814: add property function for debug purpose
         void setProperty();
 #endif
@@ -311,16 +339,12 @@ private:
     status_t setFramebufferTarget(int32_t id,
             const sp<Fence>& acquireFence, const sp<GraphicBuffer>& buf);
 
-
     struct DisplayData {
         DisplayData();
         ~DisplayData();
-        uint32_t width;
-        uint32_t height;
+        Vector<DisplayConfig> configs;
+        size_t currentConfig;
         uint32_t format;    // pixel format from FB hal, for pre-hwc-1.1
-        float xdpi;
-        float ydpi;
-        nsecs_t refresh;
         bool connected;
         bool hasFbComp;
         bool hasOvComp;
@@ -336,9 +360,10 @@ private:
 
         // protected by mEventControlLock
         int32_t events;
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
         uint8_t subtype;
         int32_t mirrorId;
+        uint32_t orientation;
 #endif
     };
 
@@ -365,18 +390,16 @@ private:
     // thread-safe
     mutable Mutex mEventControlLock;
 
-#ifndef MTK_DEFAULT_AOSP
-private:
-    bool mNeedWaitFBT;
-    mutable Mutex mFBTLock;
-    Condition mFBTCondition;
-
+#ifdef MTK_AOSP_ENHANCEMENT
 public:
-    void setWaitFramebufferTarget();
-
     uint8_t getSubType(int disp) const;
 
     status_t setDisplayMirrorId(int32_t id, int32_t mirrorId);
+
+    status_t setDisplayOrientation(int32_t id, uint32_t orientation);
+
+    // helper function to get recomposition information from SurfaceFlinger
+    bool mustRecompose(size_t dpy) const;
 
     // platform features
     hwc_feature_t mFeaturesState;

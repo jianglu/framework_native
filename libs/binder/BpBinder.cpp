@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2005 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +78,7 @@ void BpBinder::ObjectManager::detach(const void* objectID)
 void BpBinder::ObjectManager::kill()
 {
     const size_t N = mObjects.size();
-    ALOGV("Killing %d objects in manager %p", N, this);
+    ALOGV("Killing %zu objects in manager %p", N, this);
     for (size_t i=0; i<N; i++) {
         const entry_t& e = mObjects.valueAt(i);
         if (e.func != NULL) {
@@ -119,11 +124,11 @@ const String16& BpBinder::getInterfaceDescriptor() const
                 mDescriptorCache = res;
         }
     }
-    
+
     // we're returning a reference to a non-static object here. Usually this
-    // is not something smart to do, however, with binder objects it is 
+    // is not something smart to do, however, with binder objects it is
     // (usually) safe because they are reference-counted.
-    
+
     return mDescriptorCache;
 }
 
@@ -261,8 +266,8 @@ void BpBinder::sendObituary()
     mObitsSent = 1;
     mLock.unlock();
 
-    ALOGV("Reporting death of proxy %p for %d recipients\n",
-        this, obits ? obits->size() : 0);
+    ALOGV("Reporting death of proxy %p for %zu recipients\n",
+        this, obits ? obits->size() : 0U);
 
     if (obits != NULL) {
         const size_t N = obits->size();
@@ -344,7 +349,7 @@ void BpBinder::onFirstRef()
     if (ipc) ipc->incStrongHandle(mHandle);
 }
 
-void BpBinder::onLastStrongRef(const void* id)
+void BpBinder::onLastStrongRef(const void* /*id*/)
 {
     ALOGV("onLastStrongRef BpBinder %p handle %d\n", this, mHandle);
     IF_ALOGV() {
@@ -354,7 +359,7 @@ void BpBinder::onLastStrongRef(const void* id)
     if (ipc) ipc->decStrongHandle(mHandle);
 }
 
-bool BpBinder::onIncStrongAttempted(uint32_t flags, const void* id)
+bool BpBinder::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)
 {
     ALOGV("onIncStrongAttempted BpBinder %p handle %d\n", this, mHandle);
     IPCThreadState* ipc = IPCThreadState::self();

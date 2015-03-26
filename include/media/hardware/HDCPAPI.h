@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,8 +94,11 @@ struct HDCPModule {
     virtual status_t shutdownAsync() = 0;
 
     // Get capability
-    virtual uint32_t getCaps() = 0;
-    
+    // Returns the capability bitmask of this HDCP session.
+    virtual uint32_t getCaps() {
+        return HDCP_CAPS_ENCRYPT;
+    }
+
     // ENCRYPTION only:
     // Encrypt data according to the HDCP spec. "size" bytes of data are
     // available at "inData" (virtual address), "size" may not be a multiple

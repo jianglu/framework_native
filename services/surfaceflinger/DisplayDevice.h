@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,9 +38,9 @@
 
 #include "Transform.h"
 
-#ifndef MTK_DEFAULT_AOSP
-#include <gui/mediatek/FpsCounter.h>
-#endif
+#ifdef MTK_AOSP_ENHANCEMENT
+#include <FpsCounter.h>
+#endif // MTK_AOSP_ENHANCEMENT
 
 struct ANativeWindow;
 
@@ -57,6 +62,7 @@ public:
     mutable Region swapRegion;
     // region in screen space
     Region undefinedRegion;
+    bool lastCompositionHadVisibleLayers;
 
     enum DisplayType {
         DISPLAY_ID_INVALID = -1,
@@ -79,6 +85,7 @@ public:
             const sp<SurfaceFlinger>& flinger,
             DisplayType type,
             int32_t hwcId,  // negative for non-HWC-composited displays
+            int format,
             bool isSecure,
             const wp<IBinder>& displayToken,
             const sp<DisplaySurface>& displaySurface,
@@ -112,6 +119,7 @@ public:
     Region                  getDirtyRegion(bool repaintEverything) const;
 
     void                    setLayerStack(uint32_t stack);
+    void                    setDisplaySize(const int newWidth, const int newHeight);
     void                    setProjection(int orientation, const Rect& viewport, const Rect& frame);
 
     int                     getOrientation() const { return mOrientation; }
@@ -127,7 +135,9 @@ public:
     int32_t                 getHwcDisplayId() const { return mHwcDisplayId; }
     const wp<IBinder>&      getDisplayToken() const { return mDisplayToken; }
 
-    status_t beginFrame() const;
+    // We pass in mustRecompose so we can keep VirtualDisplaySurface's state
+    // machine happy without actually queueing a buffer if nothing has changed
+    status_t beginFrame(bool mustRecompose) const;
     status_t prepareFrame(const HWComposer& hwc) const;
 
     void swapBuffers(HWComposer& hwc) const;
@@ -148,12 +158,17 @@ public:
     void setViewportAndProjection() const;
 
     /* ------------------------------------------------------------------------
-     * blank / unblank management
+     * Display power mode management.
      */
-    void releaseScreen() const;
-    void acquireScreen() const;
-    bool isScreenAcquired() const;
-    bool canDraw() const;
+    int getPowerMode() const;
+    void setPowerMode(int mode);
+    bool isDisplayOn() const;
+
+    /* ------------------------------------------------------------------------
+     * Display active config management.
+     */
+    int getActiveConfig() const;
+    void setActiveConfig(int mode);
 
     // release HWC resources (if any) for removable displays
     void disconnect(HWComposer& hwc);
@@ -177,6 +192,7 @@ private:
     sp<ANativeWindow> mNativeWindow;
     sp<DisplaySurface> mDisplaySurface;
 
+    EGLConfig       mConfig;
     EGLDisplay      mDisplay;
     EGLSurface      mSurface;
     int             mDisplayWidth;
@@ -198,9 +214,6 @@ private:
     // Whether we have a visible secure layer on this display
     bool mSecureLayerVisible;
 
-    // Whether the screen is blanked;
-    mutable int mScreenAcquired;
-
 
     /*
      * Transaction state
@@ -218,8 +231,12 @@ private:
     Rect mScissor;
     Transform mGlobalTransform;
     bool mNeedsFiltering;
+    // Current power mode
+    int mPowerMode;
+    // Current active config
+    int mActiveConfig;
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 private:
     // debugging
     void drawDebugLine() const;
@@ -232,15 +249,22 @@ private:
     // which display could be mirrored
     int32_t mHwcMirrorId;
 
+    // used to check if display has changed
+    mutable bool mMustRecompose;
 public:
-    int getHwOrientation() const { return mHwOrientation; }
+    // correct geometry by device hw orientation
+    void correctSizeByHwOrientation(uint32_t &w, uint32_t &h) const;
+    void correctRotationByHwOrientation(Transform::orientation_flags &rotation) const;
+    void correctCropByHwOrientation(Rect& crop) const;
 
     int32_t getHwcMirrorId() const { return mHwcMirrorId; }
     void setHwcMirrorId(int32_t mirrorId) { mHwcMirrorId = mirrorId; }
 
-    // for lazy swap
-    mutable bool mLayersSwapRequired;
-#endif
+    void setMustRecompose(bool mustRecompose) { mMustRecompose = mustRecompose; }
+
+    // mustRecompose is called to check if need to recompose
+    bool mustRecompose() const;
+#endif // MTK_AOSP_ENHANCEMENT
 };
 
 }; // namespace android

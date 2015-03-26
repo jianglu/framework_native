@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2007 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,6 +43,7 @@
 #include <binder/IMemory.h>
 
 #include <ui/PixelFormat.h>
+#include <ui/mat4.h>
 
 #include <gui/ISurfaceComposer.h>
 #include <gui/ISurfaceComposerClient.h>
@@ -68,6 +74,11 @@ class LayerDim;
 class Surface;
 class RenderEngine;
 class EventControlThread;
+#ifdef MTK_AOSP_ENHANCEMENT
+#ifndef MTK_EMULATOR_SUPPORT
+class Resync;
+#endif
+#endif
 
 // ---------------------------------------------------------------------------
 
@@ -137,7 +148,12 @@ private:
     friend class Client;
     friend class DisplayEventConnection;
     friend class Layer;
-    friend class SurfaceTextureLayer;
+    friend class MonitoredProducer;
+#ifdef MTK_AOSP_ENHANCEMENT
+#ifndef MTK_EMULATOR_SUPPORT
+    friend class Resync;
+#endif
+#endif
 
     // This value is specified in number of frames.  Log frame stats at most
     // every half hour.
@@ -169,6 +185,7 @@ private:
         Rect viewport;
         Rect frame;
         uint8_t orientation;
+        uint32_t width, height;
         String8 displayName;
         bool isSecure;
     };
@@ -201,13 +218,18 @@ private:
     virtual sp<IDisplayEventConnection> createDisplayEventConnection();
     virtual status_t captureScreen(const sp<IBinder>& display,
             const sp<IGraphicBufferProducer>& producer,
-            uint32_t reqWidth, uint32_t reqHeight,
-            uint32_t minLayerZ, uint32_t maxLayerZ);
-    // called when screen needs to turn off
-    virtual void blank(const sp<IBinder>& display);
-    // called when screen is turning back on
-    virtual void unblank(const sp<IBinder>& display);
-    virtual status_t getDisplayInfo(const sp<IBinder>& display, DisplayInfo* info);
+            Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ,
+            bool useIdentityTransform, ISurfaceComposer::Rotation rotation);
+    virtual status_t getDisplayStats(const sp<IBinder>& display,
+            DisplayStatInfo* stats);
+    virtual status_t getDisplayConfigs(const sp<IBinder>& display,
+            Vector<DisplayInfo>* configs);
+    virtual int getActiveConfig(const sp<IBinder>& display);
+    virtual void setPowerMode(const sp<IBinder>& display, int mode);
+    virtual status_t setActiveConfig(const sp<IBinder>& display, int id);
+    virtual status_t clearAnimationFrameStats();
+    virtual status_t getAnimationFrameStats(FrameStats* outStats) const;
 
     /* ------------------------------------------------------------------------
      * DeathRecipient interface
@@ -235,10 +257,10 @@ private:
 
     // called on the main thread in response to initializeDisplays()
     void onInitializeDisplays();
-    // called on the main thread in response to blank()
-    void onScreenReleased(const sp<const DisplayDevice>& hw);
-    // called on the main thread in response to unblank()
-    void onScreenAcquired(const sp<const DisplayDevice>& hw);
+    // called on the main thread in response to setActiveConfig()
+    void setActiveConfigInternal(const sp<DisplayDevice>& hw, int mode);
+    // called on the main thread in response to setPowerMode()
+    void setPowerModeInternal(const sp<DisplayDevice>& hw, int mode);
 
     void handleMessageTransaction();
     void handleMessageInvalidate();
@@ -246,6 +268,8 @@ private:
 
     void handleTransaction(uint32_t transactionFlags);
     void handleTransactionLocked(uint32_t transactionFlags);
+
+    void updateCursorAsync();
 
     /* handlePageFilp: this is were we latch a new buffer
      * if available and compute the dirty region.
@@ -304,23 +328,20 @@ private:
 
     void renderScreenImplLocked(
             const sp<const DisplayDevice>& hw,
-            uint32_t reqWidth, uint32_t reqHeight,
+            Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ,
-            bool yswap);
+            bool yswap, bool useIdentityTransform, Transform::orientation_flags rotation);
 
     status_t captureScreenImplLocked(
             const sp<const DisplayDevice>& hw,
             const sp<IGraphicBufferProducer>& producer,
-            uint32_t reqWidth, uint32_t reqHeight,
-            uint32_t minLayerZ, uint32_t maxLayerZ);
+            Rect sourceCrop, uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ,
+            bool useIdentityTransform, Transform::orientation_flags rotation);
 
     /* ------------------------------------------------------------------------
      * EGL
      */
-    static status_t selectConfigForAttribute(EGLDisplay dpy,
-        EGLint const* attrs, EGLint attribute, EGLint value, EGLConfig* outConfig);
-    static status_t selectEGLConfig(EGLDisplay disp, EGLint visualId,
-        EGLint renderableType, EGLConfig* config);
     size_t getMaxTextureSize() const;
     size_t getMaxViewportDims() const;
 
@@ -371,7 +392,10 @@ private:
     void doComposition();
     void doDebugFlashRegions();
     void doDisplayComposition(const sp<const DisplayDevice>& hw, const Region& dirtyRegion);
-    void doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty);
+
+    // compose surfaces for display hw. this fails if using GL and the surface
+    // has been destroyed and is no longer valid.
+    bool doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty);
 
     void postFramebuffer();
     void drawWormhole(const sp<const DisplayDevice>& hw, const Region& region) const;
@@ -431,9 +455,7 @@ private:
     sp<EventThread> mSFEventThread;
     sp<EventControlThread> mEventControlThread;
     EGLContext mEGLContext;
-    EGLConfig mEGLConfig;
     EGLDisplay mEGLDisplay;
-    EGLint mEGLNativeVisualId;
     sp<IBinder> mBuiltinDisplays[DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES];
 
     // Can only accessed from the main thread, these members
@@ -479,22 +501,22 @@ private:
     Daltonizer mDaltonizer;
     bool mDaltonize;
 
-#ifndef MTK_DEFAULT_AOSP
+    mat4 mColorMatrix;
+    bool mHasColorMatrix;
+#ifdef MTK_AOSP_ENHANCEMENT
 private:
     // boot time info
     bool mBootAnimationEnabled;
 
-    // for lazy swap
-    static bool sContentsDirty;
-    void checkLayersSwapRequired(sp<const DisplayDevice>& hw,
-                                 const bool prevGlesComposition);
+    // used to check if display has changed
+    bool mMustRecompose;
+
+    // used to avoid race condition between handleMessageRefresh() and dumpAllLocked()
+    mutable Mutex mDumpLock;
 
     // for debug
     void setMTKProperties();
     void setMTKProperties(String8 &result);
-
-    // control thread priority
-    status_t adjustPriority() const;
 
     // decide to run boot animation
     void checkEnableBootAnim();
@@ -509,28 +531,21 @@ public:
     struct PropertiesState {
         PropertiesState()
             : mHwRotation(0)
-            , mBusySwap(false)
             , mLogRepaint(false)
-            , mLogBuffer(false)
             , mLogTransaction(false)
             , mLineG3D(false)
-            , mLineScreenShot(false)
-            , mDebugS3D(false)
+            , mDumpScreenShot(0)
             , mDelayTime(0)
-            , mContBufsDump(0)
+            , mDebugSkipComp(false)
+            , mAppVSyncOffset(0)
+            , mSfVSyncOffset(0)
         { }
 
         // for phyical panel rotation info
         int mHwRotation;
 
-        // force to swap buffer every frame
-        bool mBusySwap;
-
         // sf repaint log info
         bool mLogRepaint;
-
-        // log buffer queue status use in SF
-        bool mLogBuffer;
 
         // log layer state transaction
         bool mLogTransaction;
@@ -538,22 +553,20 @@ public:
         // debug G3D render
         bool mLineG3D;
 
-        // debug screen shot state
-        bool mLineScreenShot;
-
-        // switch S3D debug mode
-        bool mDebugS3D;
+        // debug screen shot result, enabled if value > 0, and increases after each dump
+        uint32_t mDumpScreenShot;
 
         // for enabling slow motion
         uint32_t mDelayTime;
 
-        // for continuous buffers dump
-        int mContBufsDump;
+        // debug composition enhancement
+        bool mDebugSkipComp;
+
+        // for VSyncOffset
+        int64_t mAppVSyncOffset;
+        int64_t mSfVSyncOffset;
     };
     static PropertiesState sPropertiesState;
-
-    // for buffer dump
-    mutable Mutex mDumpLock;
 
     // for SF watch dog identity
     uint32_t mWatchDogIndex;
@@ -561,10 +574,11 @@ public:
     // verify which display could be mirrored
     void scanMirrorDisplay();
 
-    // for lazy swap check
-    bool getAndClearLayersSwapRequired(int32_t id);
-
     bool getBootFinished() { return mBootFinished; }
+
+    // used to check if display has changed
+    // dpy is the hwc display ID defined in hwcomposer_defs.h
+    bool mustRecompose(size_t dpy) const;
 #endif
 };
 

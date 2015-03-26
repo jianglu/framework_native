@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +27,7 @@
 #include <sys/types.h>
 
 #include <GLES2/gl2.h>
+#include <Transform.h>
 
 #include "RenderEngine.h"
 #include "ProgramCache.h"
@@ -64,7 +70,8 @@ protected:
     virtual ~GLES20RenderEngine();
 
     virtual void dump(String8& result);
-    virtual void setViewportAndProjection(size_t vpw, size_t vph, size_t w, size_t h, bool yswap);
+    virtual void setViewportAndProjection(size_t vpw, size_t vph,
+            Rect sourceCrop, size_t hwh, bool yswap, Transform::orientation_flags rotation);
     virtual void setupLayerBlending(bool premultipliedAlpha, bool opaque, int alpha);
     virtual void setupDimLayerBlending(int alpha);
     virtual void setupLayerTexturing(const Texture& texture);
@@ -81,14 +88,9 @@ protected:
     virtual size_t getMaxTextureSize() const;
     virtual size_t getMaxViewportDims() const;
 
-#ifndef MTK_DEFAULT_AOSP
-private:
-    virtual uint32_t createProtectedImageTextureLocked();
-
+#ifdef MTK_AOSP_ENHANCEMENT
 protected:
-    virtual void setupLayerProtectedImage();
-    virtual void setViewportAndProjection(const sp<const DisplayDevice>& hw,
-            size_t vpw, size_t vph);
+    virtual void setupLayerProtectImage();
 #endif
 };
 

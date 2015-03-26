@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,6 +65,10 @@ private:
 
     virtual status_t destroySurface(const sp<IBinder>& handle);
 
+    virtual status_t clearLayerFrameStats(const sp<IBinder>& handle) const;
+
+    virtual status_t getLayerFrameStats(const sp<IBinder>& handle, FrameStats* outStats) const;
+
     virtual status_t onTransact(
         uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags);
 
@@ -71,6 +80,12 @@ private:
 
     // thread-safe
     mutable Mutex mLock;
+
+#ifdef MTK_AOSP_ENHANCEMENT
+    // client process info
+    int32_t mClientPid;
+    String8 mClientProcName;
+#endif
 };
 
 // ---------------------------------------------------------------------------

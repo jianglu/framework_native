@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2012 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,15 +37,35 @@ namespace android {
 
 const String16 sAccessSurfaceFlinger("android.permission.ACCESS_SURFACE_FLINGER");
 
+#ifdef MTK_AOSP_ENHANCEMENT
+extern status_t getProcessName(int pid, String8& name);
+#endif
+
 // ---------------------------------------------------------------------------
 
 Client::Client(const sp<SurfaceFlinger>& flinger)
     : mFlinger(flinger)
 {
+#ifdef MTK_AOSP_ENHANCEMENT
+    // get client process info
+    mClientPid = IPCThreadState::self()->getCallingPid();
+    getProcessName(mClientPid, mClientProcName);
+    ALOGI("[SF client] NEW(%p) for (%d:%s)", this, mClientPid, mClientProcName.string());
+#endif
 }
 
 Client::~Client()
 {
+#ifdef MTK_AOSP_ENHANCEMENT
+    // log client process info, and the layers going to be removed
+    ALOGI("[SF client] DEL(%p) for (%d:%s)", this, mClientPid, mClientProcName.string());
+    for (size_t i=0 ; i<mLayers.size() ; i++) {
+        sp<Layer> layer(mLayers.valueAt(i).promote());
+        if (layer != 0) {
+            ALOGD("    remove: %s", layer->getName().string());
+        }
+    }
+#endif
     const size_t count = mLayers.size();
     for (size_t i=0 ; i<count ; i++) {
         sp<Layer> layer(mLayers.valueAt(i).promote());
@@ -153,6 +178,24 @@ status_t Client::createSurface(
 
 status_t Client::destroySurface(const sp<IBinder>& handle) {
     return mFlinger->onLayerRemoved(this, handle);
+}
+
+status_t Client::clearLayerFrameStats(const sp<IBinder>& handle) const {
+    sp<Layer> layer = getLayerUser(handle);
+    if (layer == NULL) {
+        return NAME_NOT_FOUND;
+    }
+    layer->clearFrameStats();
+    return NO_ERROR;
+}
+
+status_t Client::getLayerFrameStats(const sp<IBinder>& handle, FrameStats* outStats) const {
+    sp<Layer> layer = getLayerUser(handle);
+    if (layer == NULL) {
+        return NAME_NOT_FOUND;
+    }
+    layer->getFrameStats(outStats);
+    return NO_ERROR;
 }
 
 // ---------------------------------------------------------------------------

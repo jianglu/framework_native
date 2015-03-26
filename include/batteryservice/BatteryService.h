@@ -1,4 +1,9 @@
 /*
+* Copyright (C) 2014 MediaTek Inc.
+* Modification based on code covered by the mentioned copyright
+* and/or permission notice(s).
+*/
+/*
  * Copyright (C) 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +23,7 @@
 #define ANDROID_BATTERYSERVICE_H
 
 #include <binder/Parcel.h>
+#include <sys/types.h>
 #include <utils/Errors.h>
 #include <utils/String8.h>
 
@@ -30,6 +36,7 @@ enum {
     BATTERY_STATUS_DISCHARGING = 3, // equals BatteryManager.BATTERY_STATUS_DISCHARGING constant
     BATTERY_STATUS_NOT_CHARGING = 4, // equals BatteryManager.BATTERY_STATUS_NOT_CHARGING constant
     BATTERY_STATUS_FULL = 5, // equals BatteryManager.BATTERY_STATUS_FULL constant
+    BATTERY_STATUS_CMD_DISCHARGING = 6, // equals BatteryManager.BATTERY_STATUS_CMD_DISCHARGING constant
 };
 
 // must be kept in sync with definitions in BatteryManager.java
@@ -43,22 +50,39 @@ enum {
     BATTERY_HEALTH_COLD = 7, // equals BatteryManager.BATTERY_HEALTH_COLD constant
 };
 
+// must be kept in sync with definitions in BatteryProperty.java
+enum {
+    BATTERY_PROP_CHARGE_COUNTER = 1, // equals BatteryProperty.CHARGE_COUNTER constant
+    BATTERY_PROP_CURRENT_NOW = 2, // equals BatteryProperty.CURRENT_NOW constant
+    BATTERY_PROP_CURRENT_AVG = 3, // equals BatteryProperty.CURRENT_AVG constant
+    BATTERY_PROP_CAPACITY = 4, // equals BatteryProperty.CAPACITY constant
+    BATTERY_PROP_ENERGY_COUNTER = 5, // equals BatteryProperty.ENERGY_COUNTER constant
+};
+
 struct BatteryProperties {
     bool chargerAcOnline;
     bool chargerUsbOnline;
     bool chargerWirelessOnline;
     int batteryStatus;
-    int batteryStatus_2nd;
+    int batteryStatus_smb;
     int batteryHealth;
     bool batteryPresent;
-    bool batteryPresent_2nd;
+    bool batteryPresent_smb;
     int batteryLevel;
-    int batteryLevel_2nd;
+    int batteryLevel_smb;
     int batteryVoltage;
     int batteryCurrentNow;
     int batteryChargeCounter;
     int batteryTemperature;
+    int adjustPower;
     String8 batteryTechnology;
+
+    status_t writeToParcel(Parcel* parcel) const;
+    status_t readFromParcel(Parcel* parcel);
+};
+
+struct BatteryProperty {
+    int64_t valueInt64;
 
     status_t writeToParcel(Parcel* parcel) const;
     status_t readFromParcel(Parcel* parcel);

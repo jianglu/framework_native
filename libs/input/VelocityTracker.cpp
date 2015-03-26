@@ -31,10 +31,6 @@
 #include <utils/BitSet.h>
 #include <utils/String8.h>
 #include <utils/Timers.h>
-#include <cutils/properties.h>
-#include <linux/ioctl.h>
-#include <linux/input.h>
-#include <fcntl.h>
 
 namespace android {
 
@@ -110,63 +106,10 @@ static String8 matrixToString(const float* a, uint32_t m, uint32_t n, bool rowMa
 // (often in a bad way) the user experience.
 const char* VelocityTracker::DEFAULT_STRATEGY = "lsq2";
 
-#define TPD_DEV "/dev/touch"
-	
-
-//#define TPD_VELOCITY_CUSTOM_Y "/sys/module/tpd_setting/parameters/tpd_magnify_velocity_y"
-static float m_velocity_magnify_x ;
-static float m_velocity_magnify_y ;
-
-#define TOUCH_IOC_MAGIC 'A'
-
-#define TPD_GET_VELOCITY_CUSTOM_X _IO(TOUCH_IOC_MAGIC,0)
-#define TPD_GET_VELOCITY_CUSTOM_Y _IO(TOUCH_IOC_MAGIC,1)
 VelocityTracker::VelocityTracker(const char* strategy) :
         mLastEventTime(0), mCurrentPointerIdBits(0), mActivePointerId(-1) {
     char value[PROPERTY_VALUE_MAX];
-	 int fd =0;
-	
-	int err= 0;
-	unsigned int datax;
-	unsigned int datay;
-	//char tpd_velocity_custom[8];
-	
-    fd = open(TPD_DEV, O_RDONLY);
-    if (fd < 0) 
-	{
-            ALOGD("Couldn't open '%s' (%s)", TPD_DEV, strerror(errno));
-    }
 
-    err = ioctl(fd, TPD_GET_VELOCITY_CUSTOM_X, &datax);
-            
-    if (err) 
-	{
-       ALOGD("tpd read x fail: %s", strerror(errno));
-	   m_velocity_magnify_x =1;
-        
-    }
-	else
-	{
-      ALOGD("VelocityTracker: int datax = %d\n",datax);   
-      m_velocity_magnify_x =(float)datax/10;
-	  ALOGD("VelocityTracker: int m_velocity_magnify_x = %f\n",m_velocity_magnify_x);   
-	}
-	
-	err = ioctl(fd, TPD_GET_VELOCITY_CUSTOM_Y, &datay);       
-    if (err) 
-	{
-       ALOGD("tpd read y fail: %s", strerror(errno));
-	   m_velocity_magnify_y =1;
-        
-    }
-	else
-	{
-      ALOGD("VelocityTracker: int datay = %d\n",datay);   
-      m_velocity_magnify_y =(float)datay/10;
-	  ALOGD("VelocityTracker: int m_velocity_magnify_y = %f\n",m_velocity_magnify_y);  
-	}
-	
-	close(fd);
     // Allow the default strategy to be overridden using a system property for debugging.
     if (!strategy) {
         int length = property_get("debug.velocitytracker.strategy", value, NULL);
@@ -392,26 +335,8 @@ void VelocityTracker::addMovement(const MotionEvent* event) {
 bool VelocityTracker::getVelocity(uint32_t id, float* outVx, float* outVy) const {
     Estimator estimator;
     if (getEstimator(id, &estimator) && estimator.degree >= 1) {
-        if(estimator.xCoeff[1]>=200000.0f&&estimator.xCoeff[1]<=203000.0f 
-				|| estimator.xCoeff[1]>=-393693.0f&&estimator.xCoeff[1]<=-393692.0f
-				|| estimator.xCoeff[1]>=-198001.0f&&estimator.xCoeff[1]<=-198000.0f
-				|| estimator.xCoeff[1]>=-1001.0f&&estimator.xCoeff[1]<=-999.0f
-				|| estimator.xCoeff[1]>=2000.0f&&estimator.xCoeff[1]<=2001.0f
-				)
-	  {
-			  *outVx = estimator.xCoeff[1] ;
-               *outVy = estimator.yCoeff[1] ;
-			   ALOGD(" android  outVx=%f", *outVx);
-			   ALOGD(" android  outVy=%f", *outVy);
-	  }
-	  else
-	  {
-	         *outVx = estimator.xCoeff[1] * m_velocity_magnify_x;
-               *outVy = estimator.yCoeff[1] * m_velocity_magnify_y;
-			  // ALOGD(" fwq outVx=%f", *outVx);
-			   //ALOGD(" fwq outVy=%f", *outVy); 
-			   
-	  }
+        *outVx = estimator.xCoeff[1];
+        *outVy = estimator.yCoeff[1];
         return true;
     }
     *outVx = 0;
