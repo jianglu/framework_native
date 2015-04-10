@@ -119,7 +119,7 @@ void SensorService::onFirstRef()
 
             // build the sensor list returned to users
             mUserSensorList = mSensorList;
-
+/* longcheer lg delete
             if (hasGyro) {
                 Sensor aSensor;
 
@@ -152,7 +152,7 @@ void SensorService::onFirstRef()
                 registerVirtualSensor( new CorrectedGyroSensor(list, count) );
                 registerVirtualSensor( new GyroDriftSensor() );
             }
-
+*/
             // debugging sensor list
             mUserSensorListDebug = mSensorList;
 
