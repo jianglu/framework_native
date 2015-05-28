@@ -15,6 +15,7 @@
 -->
 
 <!-- Feature for devices with barometer. -->
+<!--<feature name="android.hardware.sensor.barometer" />-->
 <permissions>
-    <feature name="android.hardware.sensor.barometer" />
+    
 </permissions>
