@@ -1152,7 +1152,10 @@ void SurfaceFlinger::setUpHWComposer() {
     // handle primary display first
     {
         sp<DisplayDevice>& hw = mDisplays.editValueFor(mBuiltinDisplays[DisplayDevice::DISPLAY_PRIMARY]);
-        bool dirty = !hw->getDirtyRegion(false).isEmpty();
+        // MIUI MOD:
+        // 为了让repaintEverything()方法正常生效，于是修改
+        // bool dirty = !hw->getDirtyRegion(false).isEmpty();
+        bool dirty = !hw->getDirtyRegion(mRepaintEverything).isEmpty();
         bool empty = hw->getVisibleLayersSortedByZ().size() == 0;
         bool wasEmpty = !hw->lastCompositionHadVisibleLayers;
 
