@@ -363,7 +363,7 @@ status_t BufferQueueProducer::dequeueBuffer(int *outSlot,
 #ifdef MTK_AOSP_ENHANCEMENT
         else {
 #ifndef MTK_EMULATOR_SUPPORT
-            mCore->debugger.setIonInfoOnDequeue(graphicBuffer);
+            mCore->debugger.setIonInfo(graphicBuffer, usage);
 #endif // MTK_EMULATOR_SUPPORT
             if (CC_UNLIKELY((width != uint32_t(graphicBuffer->width)) ||
                         (height != uint32_t(graphicBuffer->height)) ||
@@ -1002,8 +1002,13 @@ void BufferQueueProducer::allocateBuffers(bool async, uint32_t width,
             }
 
             int maxBufferCount = mCore->getMaxBufferCountLocked(async);
+#ifdef MTK_AOSP_ENHANCEMENT
+            BQ_LOGD("allocateBuffers: allocating from %d buffers up to %d buffers",
+                    currentBufferCount, maxBufferCount);
+#else
             BQ_LOGV("allocateBuffers: allocating from %d buffers up to %d buffers",
                     currentBufferCount, maxBufferCount);
+#endif
             if (maxBufferCount <= currentBufferCount)
                 return;
             newBufferCount = maxBufferCount - currentBufferCount;
@@ -1032,6 +1037,11 @@ void BufferQueueProducer::allocateBuffers(bool async, uint32_t width,
                 mCore->mIsAllocatingCondition.broadcast();
                 return;
             }
+#ifdef MTK_AOSP_ENHANCEMENT
+            else {
+                mCore->debugger.setIonInfo(graphicBuffer, allocUsage);
+            }
+#endif
             buffers.push_back(graphicBuffer);
         }
 

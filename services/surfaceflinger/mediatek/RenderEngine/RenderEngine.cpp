@@ -94,6 +94,111 @@ void RenderEngine::drawDebugLine(
     glDisable(GL_SCISSOR_TEST);
 }
 
+void RenderEngine::adjustScissorS3D(const sp<const DisplayDevice>& hw) {
+    Rect b = hw->getBounds();
+    uint32_t w = b.width();
+    uint32_t h = b.height();
+
+    switch (hw->mS3DPhase) {
+        case DisplayDevice::eComposingS3DSBSLeft:
+            {
+                const Rect& bounds(hw->getBounds());
+                const Rect& scissor(hw->getScissor());
+                if (scissor != bounds) {
+                    const uint32_t height = hw->getHeight();
+                    uint32_t tmp = scissor.getWidth() / 2;
+                    setScissor((scissor.left / 2),
+                                height - scissor.bottom,
+                                (scissor.getWidth() - tmp),
+                                scissor.getHeight());
+                }
+                break;
+            }
+        case DisplayDevice::eComposingS3DSBSRight:
+            {
+                const Rect& bounds(hw->getBounds());
+                const Rect& scissor(hw->getScissor());
+                if (scissor != bounds) {
+                    const uint32_t height = hw->getHeight();
+                    uint32_t tmp = scissor.getWidth() / 2;
+                    setScissor((scissor.left / 2) + ((hw->getWidth() / 2)),
+                                height - scissor.bottom,
+                                (scissor.getWidth() - tmp),
+                                scissor.getHeight());
+                }
+                break;
+            }
+        case DisplayDevice::eComposingS3DTABTop:
+            {
+                const Rect& bounds(hw->getBounds());
+                const Rect& scissor(hw->getScissor());
+                if (scissor != bounds) {
+                    const uint32_t height = hw->getHeight();
+                    uint32_t tmp = scissor.getHeight() / 2;
+                    setScissor(scissor.left,
+                                ((height - scissor.bottom) / 2),
+                                scissor.getWidth(),
+                                (scissor.getHeight() - tmp));
+                }
+                break;
+            }
+        case DisplayDevice::eComposingS3DTABBottom:
+            {
+                const Rect& bounds(hw->getBounds());
+                const Rect& scissor(hw->getScissor());
+                if (scissor != bounds) {
+                    const uint32_t height = hw->getHeight();
+                    uint32_t tmp = scissor.getHeight() / 2;
+                    setScissor(scissor.left,
+                            ((((height - scissor.bottom) / 2) + ((hw->getHeight()) / 2))),
+                            scissor.getWidth(),
+                            (scissor.getHeight() - tmp));
+                }
+                break;
+            }
+        default:
+            break;
+    }
+}
+
+void RenderEngine::adjustViewPortS3D(const sp<const DisplayDevice>& hw) {
+    Rect b = hw->getBounds();
+    uint32_t w = b.width();
+    uint32_t h = b.height();
+
+    switch (hw->mS3DPhase) {
+        case DisplayDevice::eComposingS3DSBSLeft:
+            {
+                uint32_t tmp = w / 2;
+                glViewport(0, 0, (w - tmp), h);
+                break;
+            }
+        case DisplayDevice::eComposingS3DSBSRight:
+            {
+                uint32_t tmp = w / 2;
+                glViewport((w / 2), 0, (w - tmp), h);
+                break;
+            }
+        case DisplayDevice::eComposingS3DTABTop:
+            {
+                uint32_t tmp = h / 2;
+                glViewport(0, 0, w, (h - tmp));
+                break;
+            }
+        case DisplayDevice::eComposingS3DTABBottom:
+            {
+                uint32_t tmp = h / 2;
+                glViewport(0, (h / 2), w, (h - tmp));
+                break;
+            }
+        case DisplayDevice::eComposing2D:
+        default:
+            {
+                glViewport(0, 0, w, h);
+            }
+    }
+}
+
 // ---------------------------------------------------------------------------
 }; // namespace android
 // ---------------------------------------------------------------------------

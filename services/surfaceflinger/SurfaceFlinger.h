@@ -526,6 +526,9 @@ private:
 
     virtual status_t getDisplayInfoEx(const sp<IBinder>& display, DisplayInfoEx* info);
 
+    // for S3D feature
+    bool doComposeS3D(const sp<const DisplayDevice>& hw, const Region& dirty);
+
 public:
     // helper class for collect related property settings
     struct PropertiesState {

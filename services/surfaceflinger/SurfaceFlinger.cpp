@@ -2044,7 +2044,11 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     }
 
     if (CC_LIKELY(!mDaltonize && !mHasColorMatrix)) {
+#ifdef MTK_AOSP_ENHANCEMENT
+        if (!doComposeS3D(hw, dirtyRegion)) return;
+#else
         if (!doComposeSurfaces(hw, dirtyRegion)) return;
+#endif
     } else {
         RenderEngine& engine(getRenderEngine());
         mat4 colorMatrix = mColorMatrix;
@@ -2052,7 +2056,11 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
             colorMatrix = colorMatrix * mDaltonizer();
         }
         engine.beginGroup(colorMatrix);
+#ifdef MTK_AOSP_ENHANCEMENT
+        doComposeS3D(hw, dirtyRegion);
+#else
         doComposeSurfaces(hw, dirtyRegion);
+#endif
         engine.endGroup();
     }
 
@@ -2090,6 +2098,11 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             return false;
         }
 
+#ifdef MTK_AOSP_ENHANCEMENT
+		//adjust S3D render viewport
+        if (hw->mS3DPhase != DisplayDevice::eComposing2D)
+            engine.adjustViewPortS3D(hw);
+#endif
         // Never touch the framebuffer if we don't have any framebuffer layers
         const bool hasHwcComposition = hwc.hasHwcComposition(id);
         if (hasHwcComposition) {
@@ -2098,7 +2111,14 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             // remove where there are opaque FB layers. however, on some
             // GPUs doing a "clean slate" clear might be more efficient.
             // We'll revisit later if needed.
+#ifdef MTK_AOSP_ENHANCEMENT
+            if ((hw->mS3DPhase != DisplayDevice::eComposingS3DSBSRight) &&
+                (hw->mS3DPhase != DisplayDevice::eComposingS3DTABBottom)) {
+                engine.clearWithColor(0, 0, 0, 0);
+            }
+#else
             engine.clearWithColor(0, 0, 0, 0);
+#endif
         } else {
             // we start with the whole screen area
             const Region bounds(hw->getBounds());
@@ -2145,6 +2165,10 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                 const uint32_t height = hw->getHeight();
                 engine.setScissor(scissor.left, height - scissor.bottom,
                         scissor.getWidth(), scissor.getHeight());
+
+#ifdef MTK_AOSP_ENHANCEMENT
+                engine.adjustScissorS3D(hw);
+#endif
             }
         }
     }
