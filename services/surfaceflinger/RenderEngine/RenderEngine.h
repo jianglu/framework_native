@@ -153,6 +153,10 @@ public:
     // draw debugging line to the given DisplayDevice
     void drawDebugLine(const sp<const DisplayDevice>& hw,
             uint32_t color = 0xFFFFFFFF, uint32_t steps = 32) const;
+
+    //for S3D feature
+    void adjustViewPortS3D(const sp<const DisplayDevice>& hw);
+    void adjustScissorS3D(const sp<const DisplayDevice>& hw);
 #endif
 };
 

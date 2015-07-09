@@ -109,7 +109,8 @@ BufferQueueDebug::BufferQueueDebug() :
     mLine(false),
     mLineCnt(0),
     mDump(NULL),
-    mGeneralDump(false)
+    mGeneralDump(false),
+    mScenarioLayerType(0)
 {
 }
 
@@ -180,6 +181,9 @@ void BufferQueueDebug::onSetConsumerName(const String8& consumerName) {
     mConsumerName = consumerName;
     // update dump info
     mDump->setName(mConsumerName);
+    if (consumerName == String8("NavigationBar")) {
+        mScenarioLayerType = GRALLOC_EXTRA_BIT2_LAYER_NAV;
+    }
 
     // check property for drawing debug line
     BQC_LOGI("setConsumerName: %s", mConsumerName.string());
@@ -246,12 +250,20 @@ void BufferQueueDebug::onConsumerDisconnectTail() {
 
 // BufferQueueProducer part
 // -----------------------------------------------------------------------------
-void BufferQueueDebug::setIonInfoOnDequeue(const sp<GraphicBuffer>& gb) {
+void BufferQueueDebug::setIonInfo(const sp<GraphicBuffer>& gb, int usage) {
 #ifndef MTK_EMULATOR_SUPPORT
     if (gb->handle != NULL) {
         gralloc_extra_ion_debug_t info;
         snprintf(info.name, 16, "p:%d c:%d", mProducerPid, mConsumerPid);
         gralloc_extra_perform(gb->handle, GRALLOC_EXTRA_SET_IOCTL_ION_DEBUG, &info);
+
+        if ((usage & GRALLOC_USAGE_HW_COMPOSER) && (mScenarioLayerType == GRALLOC_EXTRA_BIT2_LAYER_NAV)) {
+            gralloc_extra_ion_sf_info_t sf_info;
+
+            gralloc_extra_query(gb->handle, GRALLOC_EXTRA_GET_IOCTL_ION_SF_INFO, &sf_info);
+            gralloc_extra_sf_set_status2(&sf_info, GRALLOC_EXTRA_MASK2_LAYER_TYPE, GRALLOC_EXTRA_BIT2_LAYER_NAV);
+            gralloc_extra_perform(gb->handle, GRALLOC_EXTRA_SET_IOCTL_ION_SF_INFO, &sf_info);
+        }
     } else {
         BQP_LOGE("handle of graphic buffer is NULL when producer set ION info");
     }

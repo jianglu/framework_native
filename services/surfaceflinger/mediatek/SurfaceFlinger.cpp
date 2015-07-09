@@ -324,4 +324,45 @@ void SurfaceFlinger::setMTKProperties(String8 &result) {
     result.append("========================================================================\n\n");
 }
 
+bool SurfaceFlinger::doComposeS3D(const sp<const DisplayDevice>&hw, const Region& dirty)
+{
+    bool result = false;
+    if (hw->hasS3DLayer()) {
+        if (hw->s3dType() == HWC_IS_S3D_LAYER_SBS) {
+            hw->mS3DPhase = DisplayDevice::eComposingS3DSBSLeft;
+            result |= doComposeSurfaces(hw, dirty);
+            if (!result) {
+                return result;
+            }
+
+            hw->mS3DPhase = DisplayDevice::eComposingS3DSBSRight;
+            result |= doComposeSurfaces(hw, dirty);
+            hw->mS3DPhase = DisplayDevice::eComposing2D;
+
+            if (!result) {
+                return result;
+            }
+        } else if (hw->s3dType() == HWC_IS_S3D_LAYER_TAB) {
+            hw->mS3DPhase = DisplayDevice::eComposingS3DTABTop;
+            result |= doComposeSurfaces(hw, dirty);
+            if (!result) {
+                return result;
+            }
+
+            hw->mS3DPhase = DisplayDevice::eComposingS3DTABBottom;
+            result |= doComposeSurfaces(hw, dirty);
+            hw->mS3DPhase = DisplayDevice::eComposing2D;
+
+            if (!result) {
+                return result;
+            }
+        }
+    } else {
+        result |= doComposeSurfaces(hw, dirty);
+        return result;
+    }
+
+    return result;
+}
+
 }; // namespace android

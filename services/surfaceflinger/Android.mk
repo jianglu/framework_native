@@ -103,6 +103,7 @@ LOCAL_SHARED_LIBRARIES := \
 # --- MediaTek ---------------------------------------------------------------
 ifneq (, $(findstring MTK_AOSP_ENHANCEMENT, $(COMMON_GLOBAL_CPPFLAGS)))
 	LOCAL_SRC_FILES += \
+		mediatek/Layer.cpp \
 		mediatek/DisplayDevice.cpp \
 		mediatek/SurfaceFlinger.cpp \
 		mediatek/DisplayHardware/HWComposer.cpp \
@@ -131,7 +132,8 @@ LOCAL_REQUIRED_MODULES += \
 LOCAL_SHARED_LIBRARIES += \
 	libskia \
 	libui_ext \
-	libselinux
+	libselinux \
+	libgralloc_extra
 
 LOCAL_C_INCLUDES += \
 	$(TOP)/$(MTK_ROOT)/hardware/include \

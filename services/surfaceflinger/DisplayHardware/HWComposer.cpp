@@ -729,6 +729,9 @@ status_t HWComposer::prepare() {
             DisplayData& disp(mDisplayData[i]);
             disp.hasFbComp = false;
             disp.hasOvComp = false;
+#ifdef MTK_AOSP_ENHANCEMENT
+            disp.hasS3DLayer = false; 
+#endif
             if (disp.list) {
                 for (size_t i=0 ; i<disp.list->numHwLayers ; i++) {
                     hwc_layer_1_t& l = disp.list->hwLayers[i];
@@ -739,6 +742,17 @@ status_t HWComposer::prepare() {
                     if (l.flags & HWC_SKIP_LAYER) {
                         l.compositionType = HWC_FRAMEBUFFER;
                     }
+#ifdef MTK_AOSP_ENHANCEMENT
+                    if (l.flags & HWC_IS_S3D_LAYER) {
+                        disp.hasS3DLayer = true;
+                        if (l.flags & HWC_IS_S3D_LAYER_SBS) {
+                            disp.s3dType = HWC_IS_S3D_LAYER_SBS;
+                        }
+                        else if (l.flags & HWC_IS_S3D_LAYER_TAB) {
+                            disp.s3dType = HWC_IS_S3D_LAYER_TAB;
+                        }
+                    }
+#endif
                     if (l.compositionType == HWC_FRAMEBUFFER) {
                         disp.hasFbComp = true;
                     }
@@ -1133,6 +1147,11 @@ public:
         } else {
             getLayer()->flags &= ~HWC_DIM_LAYER;
         }
+    }
+    virtual void setBufferCrop(const Rect& crop) {
+        hwc_layer_ext_info_t* ptr = (hwc_layer_ext_info_t*)getLayer()->reserved;
+        ptr->buffer_crop_width = crop.getWidth();
+        ptr->buffer_crop_height = crop.getHeight();
     }
 #endif
 };

@@ -122,6 +122,7 @@ DisplayDevice::DisplayDevice(
 #ifdef MTK_AOSP_ENHANCEMENT
     mHwOrientation = DisplayState::eOrientationDefault;
     mHwcMirrorId = -1;
+    mS3DPhase = eComposing2D;
 #endif
 
     // Name the display.  The name will be replaced shortly if the display
@@ -235,6 +236,13 @@ status_t DisplayDevice::prepareFrame(const HWComposer& hwc) const {
     DisplaySurface::CompositionType compositionType;
     bool haveGles = hwc.hasGlesComposition(mHwcDisplayId);
     bool haveHwc = hwc.hasHwcComposition(mHwcDisplayId);
+
+#ifdef MTK_AOSP_ENHANCEMENT
+    mHas3DLayer = hwc.hasS3DLayer(mHwcDisplayId);
+    if (mHas3DLayer) {
+        mS3DType = hwc.s3dType(mHwcDisplayId);
+    }
+#endif
     if (haveGles && haveHwc) {
         compositionType = DisplaySurface::COMPOSITION_MIXED;
     } else if (haveGles) {

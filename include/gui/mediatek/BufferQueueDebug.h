@@ -46,6 +46,9 @@ struct BufferQueueDebug : public RefBase {
     // whether dump mechanism of general buffer queue is enabled or not
     bool mGeneralDump;
 
+    // layer type in different scenarios
+    int mScenarioLayerType;
+
     BufferQueueDebug();
     virtual ~BufferQueueDebug();
 
@@ -71,7 +74,7 @@ struct BufferQueueDebug : public RefBase {
             const bool controlledByApp);
 
     // BufferQueueProducer part
-    void setIonInfoOnDequeue(const sp<GraphicBuffer>& gb);
+    void setIonInfo(const sp<GraphicBuffer>& gb, int usage);
     void onDequeue(const int outBuf, sp<GraphicBuffer>& gb, sp<Fence>& fence);
     void onQueue(const int buf, const int64_t timestamp);
     void onCancel(const int buf);

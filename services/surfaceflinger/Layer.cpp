@@ -445,10 +445,12 @@ void Layer::setGeometry(
     Rect frame(s.transform.transform(computeBounds()));
     frame.intersect(hw->getViewport(), &frame);
     const Transform& tr(hw->getTransform());
+#ifdef MTK_AOSP_ENHANCEMENT
+    layer.setBufferCrop(mSurfaceFlingerConsumer->getCurrentCrop());
+#endif
     layer.setFrame(tr.transform(frame));
     layer.setCrop(computeCrop(hw));
     layer.setPlaneAlpha(s.alpha);
-
     /*
      * Transformations are applied in this order:
      * 1) buffer orientation/flip/mirror
@@ -667,8 +669,13 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 #ifdef HAS_HANDY_MODE
         isHandyScaleMode = HandyModeForSF::getInstance()->isInScaleMode();
 #endif
-        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
+        //const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
 
+#ifdef MTK_AOSP_ENHANCEMENT
+	const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || hw->hasS3DLayer() || isHandyScaleMode;
+#else
+        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
+#endif
         // Query the texture matrix given our current filtering mode.
         float textureMatrix[16];
         mSurfaceFlingerConsumer->setFilteringEnabled(useFiltering);
@@ -712,7 +719,7 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 #ifdef MTK_AOSP_ENHANCEMENT
         char value[PROPERTY_VALUE_MAX];
         property_get("debug.sf.no_security_img", value, "0");
-        if (atoi(value) == 0)
+        if ((atoi(value) == 0) && (false == hw->isSecure()))
             engine.setupLayerProtectImage();
         else
 #endif
@@ -773,6 +780,12 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     texCoords[1] = vec2(left, 1.0f - bottom);
     texCoords[2] = vec2(right, 1.0f - bottom);
     texCoords[3] = vec2(right, 1.0f - top);
+
+#ifdef MTK_AOSP_ENHANCEMENT
+    if (hw->hasS3DLayer()) {
+        adjustTexCoord(hw, texCoords);
+    }
+#endif
 
     RenderEngine& engine(mFlinger->getRenderEngine());
     engine.setupLayerBlending(mPremultipliedAlpha, isOpaque(s), s.alpha);

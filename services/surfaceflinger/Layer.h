@@ -423,6 +423,12 @@ private:
     bool mPotentialCursor;
 
 #ifdef MTK_AOSP_ENHANCEMENT
+private:
+    // calculate tex coord according to display deivce composition phase
+    status_t adjustTexCoord(const sp<const DisplayDevice>& hw, Mesh::VertexArray<vec2> texCoords) const;
+
+    // check if active buffer S3D
+    bool hasS3DBuffer() const;
 public:
     virtual bool isDim() const { return false; }
 
