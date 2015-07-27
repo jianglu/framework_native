@@ -33,13 +33,13 @@
 //add by qinhai for cx861 end
 			
 // Enables debug output for the parser.
-#define DEBUG_PARSER 0
+#define DEBUG_PARSER 1
 
 // Enables debug output for parser performance.
-#define DEBUG_PARSER_PERFORMANCE 0
+#define DEBUG_PARSER_PERFORMANCE 1
 
 // Enables debug output for mapping.
-#define DEBUG_MAPPING 0
+#define DEBUG_MAPPING 1
 
 
 namespace android {
@@ -87,9 +87,12 @@ status_t KeyLayoutMap::load(const String8& filename, sp<KeyLayoutMap>* outMap) {
     return status;
 }
 
+#include <stdio.h>
 status_t KeyLayoutMap::mapKey(int32_t scanCode, int32_t usageCode,
         int32_t* outKeyCode, uint32_t* outFlags) const {
     const Key* key = getKey(scanCode, usageCode);
+	int switch_state ;
+	FILE *fd;
     if (!key) {
 #if DEBUG_MAPPING
         ALOGD("mapKey: scanCode=%d, usageCode=0x%08x ~ Failed.", scanCode, usageCode);
@@ -98,11 +101,18 @@ status_t KeyLayoutMap::mapKey(int32_t scanCode, int32_t usageCode,
         *outFlags = 0;
         return NAME_NOT_FOUND;
     }
+#if 1
+	fd = fopen("/sys/class/switch/h2w/state", "r");
+	fscanf(fd, "%d", &switch_state);
+	fclose(fd);
+	ALOGD("swtich state=%d \n",  switch_state);
+#endif
+	
 //add by qinhai for cx861 begin
 #if HAVE_ANDROID_OS 	
 #define MEDIA_PREVIOUS_SCAN_CODE 165	
 #define MEDIA_NEXT_SCAN_CODE 163	
-if (scanCode == MEDIA_NEXT_SCAN_CODE || scanCode == MEDIA_PREVIOUS_SCAN_CODE) {	
+if ( (switch_state == 1 ) && (scanCode == MEDIA_NEXT_SCAN_CODE || scanCode == MEDIA_PREVIOUS_SCAN_CODE)) {	
 	char profile_value[PROPERTY_VALUE_MAX];	
 	char switch_value[PROPERTY_VALUE_MAX];	
 	unsigned int button_jack_switch = 0;	
