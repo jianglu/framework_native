@@ -48,7 +48,9 @@
     <feature name="android.software.device_admin" />
 
     <!-- Feature to specify if the device support managed users. -->
+    <!-- modify by zhengbaojiang for cts ALPS02252728 & ALPS02249571
     <feature name="android.software.managed_users" />
+    -->
 
     <!-- devices with GPS must include android.hardware.location.gps.xml -->
     <!-- devices with an autofocus camera and/or flash must include either
