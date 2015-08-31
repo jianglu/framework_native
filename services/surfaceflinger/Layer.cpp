@@ -57,7 +57,7 @@
 #endif
 
 #ifdef HAS_BLUR
-#include "Blur.h"
+#include "MiuiBlur.h"
 #endif
 
 #ifdef HAS_HANDY_MODE
