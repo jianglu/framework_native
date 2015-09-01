@@ -880,9 +880,13 @@ static void run_dex2oat(int zip_fd, int oat_fd, const char* input_file_name,
     // If we booting without the real /data, don't spend time compiling.
     char vold_decrypt[PROPERTY_VALUE_MAX];
     bool have_vold_decrypt = property_get("vold.decrypt", vold_decrypt, "") > 0;
-    bool skip_compilation = (have_vold_decrypt &&
-                             (strcmp(vold_decrypt, "trigger_restart_min_framework") == 0 ||
-                             (strcmp(vold_decrypt, "1") == 0)));
+    // MIUI MOD : START
+    // MIUI-78179
+    //bool skip_compilation = (have_vold_decrypt &&
+    //                         (strcmp(vold_decrypt, "trigger_restart_min_framework") == 0 ||
+    //                         (strcmp(vold_decrypt, "1") == 0)));
+    bool skip_compilation = false;
+    // END
 
     static const char* DEX2OAT_BIN = "/system/bin/dex2oat";
 
