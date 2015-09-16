@@ -133,7 +133,12 @@ static void dumpstate() {
     do_dmesg();
 
     run_command("LIST OF OPEN FILES", 10, SU_PATH, "root", "lsof", NULL);
-    for_each_pid(do_showmap, "SMAPS OF ALL PROCESSES");
+    // MIUI MOD: START
+    struct stat st_showmap;
+    if (!stat("/system/bin/showmap", &st_showmap)) {
+        for_each_pid(do_showmap, "SMAPS OF ALL PROCESSES");
+    }
+    // MIUI END
     for_each_tid(show_wchan, "BLOCKED PROCESS WAIT-CHANNELS");
 
     if (screenshot_path[0]) {
@@ -332,7 +337,11 @@ static void dumpstate() {
     printf("========================================================\n");
 
     run_command("CHECKIN BATTERYSTATS", 30, "dumpsys", "batterystats", "-c", NULL);
-    run_command("CHECKIN MEMINFO", 30, "dumpsys", "meminfo", "--checkin", NULL);
+    // MIUI DEL: START
+    // MemInfo dumped already in 'run_command("DUMPSYS", 60, "dumpsys", NULL);'
+    // Remove CHECKIN MEMINFO to save a lot of time
+    // run_command("CHECKIN MEMINFO", 30, "dumpsys", "meminfo", "--checkin", NULL);
+    // END
     run_command("CHECKIN NETSTATS", 30, "dumpsys", "netstats", "--checkin", NULL);
     run_command("CHECKIN PROCSTATS", 30, "dumpsys", "procstats", "-c", NULL);
     run_command("CHECKIN USAGESTATS", 30, "dumpsys", "usagestats", "-c", NULL);
@@ -358,6 +367,11 @@ static void dumpstate() {
 
     printf("========================================================\n");
     printf("== dumpstate: done\n");
+    // MIUI ADD: START
+    now = time(NULL);
+    strftime(date, sizeof(date), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    printf("== %s\n", date);
+    // END
     printf("========================================================\n");
 }
 
