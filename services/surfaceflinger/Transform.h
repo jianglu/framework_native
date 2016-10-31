@@ -74,6 +74,7 @@ public:
             void        set(float tx, float ty);
             void        set(float a, float b, float c, float d);
             status_t    set(uint32_t flags, float w, float h);
+            void        scaleV(float scale, float h);
 
             // transform data
             Rect    makeBounds(int w, int h) const;

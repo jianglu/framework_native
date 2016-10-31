@@ -29,7 +29,6 @@
 
 #ifdef MTK_AOSP_ENHANCEMENT
 #include <utils/Trace.h>
-#include "gralloc_mtk_defs.h"
 
 #define ATRACE_BUFFER_INDEX(name, index)                                        \
     if (ATRACE_ENABLED()) {                                                     \
@@ -112,9 +111,6 @@ VirtualDisplaySurface::VirtualDisplaySurface(HWComposer& hwc, int32_t dispId,
     mConsumer->setConsumerUsageBits(GRALLOC_USAGE_HW_COMPOSER);
     mConsumer->setDefaultBufferSize(sinkWidth, sinkHeight);
     mConsumer->setDefaultMaxBufferCount(2);
-#ifdef MTK_AOSP_ENHANCEMENT
-    mWifiDisplay = (sinkUsage & GRALLOC_USAGE_WIFIDISPLAY);
-#endif
 }
 
 VirtualDisplaySurface::~VirtualDisplaySurface() {
@@ -279,11 +275,7 @@ void VirtualDisplaySurface::onFrameCommitted() {
                         systemTime(), false /* isAutoTimestamp */,
                         Rect(mSinkBufferWidth, mSinkBufferHeight),
                         NATIVE_WINDOW_SCALING_MODE_FREEZE, 0 /* transform */,
-#ifdef MTK_AOSP_ENHANCEMENT
-                        !mWifiDisplay,
-#else
                         true /* async*/,
-#endif
                         outFence),
                     &qbo);
             if (result == NO_ERROR) {

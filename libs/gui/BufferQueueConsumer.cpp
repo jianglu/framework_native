@@ -31,10 +31,6 @@
 #include <gui/IConsumerListener.h>
 #include <gui/IProducerListener.h>
 
-#include <binder/IPCThreadState.h>
-#include <binder/PermissionCache.h>
-#include <private/android_filesystem_config.h>
-
 namespace android {
 
 BufferQueueConsumer::BufferQueueConsumer(const sp<BufferQueueCore>& core) :
@@ -46,7 +42,11 @@ BufferQueueConsumer::~BufferQueueConsumer() {}
 
 status_t BufferQueueConsumer::acquireBuffer(BufferItem* outBuffer,
         nsecs_t expectedPresent) {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ATRACE_CALL_PERF();
+#else
     ATRACE_CALL();
+#endif
     Mutex::Autolock lock(mCore->mMutex);
 
     // Check that the consumer doesn't currently have the maximum number of
@@ -603,18 +603,7 @@ sp<NativeHandle> BufferQueueConsumer::getSidebandStream() const {
 }
 
 void BufferQueueConsumer::dump(String8& result, const char* prefix) const {
-    const IPCThreadState* ipc = IPCThreadState::self();
-    const pid_t pid = ipc->getCallingPid();
-    const uid_t uid = ipc->getCallingUid();
-    if ((uid != AID_SHELL)
-            && !PermissionCache::checkPermission(String16(
-            "android.permission.DUMP"), pid, uid)) {
-        result.appendFormat("Permission Denial: can't dump BufferQueueConsumer "
-                "from pid=%d, uid=%d\n", pid, uid);
-        android_errorWriteWithInfoLog(0x534e4554, "27046057", uid, NULL, 0);
-    } else {
-        mCore->dump(result, prefix);
-    }
+    mCore->dump(result, prefix);
 }
 
 } // namespace android

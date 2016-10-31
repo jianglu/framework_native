@@ -144,6 +144,10 @@ public:
         return *mRenderEngine;
     }
 
+    int getInterleaveMode() const;
+
+    float getInterleaveScaleRatio() const;
+
 private:
     friend class Client;
     friend class DisplayEventConnection;
@@ -262,8 +266,12 @@ private:
     // called on the main thread in response to setPowerMode()
     void setPowerModeInternal(const sp<DisplayDevice>& hw, int mode);
 
-    void handleMessageTransaction();
-    void handleMessageInvalidate();
+    // Returns whether the transaction actually modified any state
+    bool handleMessageTransaction();
+
+    // Returns whether a new buffer has been latched (see handlePageFlip())
+    bool handleMessageInvalidate();
+
     void handleMessageRefresh();
 
     void handleTransaction(uint32_t transactionFlags);
@@ -271,10 +279,11 @@ private:
 
     void updateCursorAsync();
 
-    /* handlePageFilp: this is were we latch a new buffer
-     * if available and compute the dirty region.
+    /* handlePageFlip - latch a new buffer if available and compute the dirty
+     * region. Returns whether a new buffer has been latched, i.e., whether it
+     * is necessary to perform a refresh during this vsync.
      */
-    void handlePageFlip();
+    bool handlePageFlip();
 
     /* ------------------------------------------------------------------------
      * Transactions
@@ -479,8 +488,6 @@ private:
     volatile nsecs_t mDebugInTransaction;
     nsecs_t mLastTransactionTime;
     bool mBootFinished;
-    bool mHasBlurLayer;
-    bool mIsHandyMode;
 
     // these are thread safe
     mutable MessageQueue mEventQueue;
@@ -505,6 +512,10 @@ private:
 
     mat4 mColorMatrix;
     bool mHasColorMatrix;
+
+    int mInterleaveMode;
+    float mInterleaveScaleRatio;
+
 #ifdef MTK_AOSP_ENHANCEMENT
 private:
     // boot time info
@@ -528,9 +539,6 @@ private:
 
     virtual status_t getDisplayInfoEx(const sp<IBinder>& display, DisplayInfoEx* info);
 
-    // for S3D feature
-    bool doComposeS3D(const sp<const DisplayDevice>& hw, const Region& dirty);
-
 public:
     // helper class for collect related property settings
     struct PropertiesState {
@@ -539,6 +547,7 @@ public:
             , mLogRepaint(false)
             , mLogTransaction(false)
             , mLineG3D(false)
+            , mLineSS(false)
             , mDumpScreenShot(0)
             , mDelayTime(0)
             , mDebugSkipComp(false)
@@ -557,6 +566,9 @@ public:
 
         // debug G3D render
         bool mLineG3D;
+
+        // debug screenshot
+        bool mLineSS;
 
         // debug screen shot result, enabled if value > 0, and increases after each dump
         uint32_t mDumpScreenShot;

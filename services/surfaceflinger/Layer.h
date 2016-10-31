@@ -62,9 +62,6 @@ class Colorizer;
 class DisplayDevice;
 class GraphicBuffer;
 class SurfaceFlinger;
-#ifdef HAS_BLUR
-class BlurSurface;
-#endif
 
 // ---------------------------------------------------------------------------
 
@@ -80,16 +77,6 @@ class Layer : public SurfaceFlingerConsumer::ContentsChangedListener {
 
 public:
     mutable bool contentDirty;
-
-#ifdef HAS_BLUR
-    BlurSurface* blurSurface;
-    mutable bool coveredByBlur;
-    mutable volatile int32_t mQueuedFramesBackForBlur;
-
-    void setupBlurSurface(bool enable);
-    void destroyBlurSurface();
-#endif
-
     // regions below are in window-manager space
     Region visibleRegion;
     Region coveredRegion;
@@ -160,6 +147,7 @@ public:
 
     void computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh,
             bool useIdentityTransform) const;
+    Rect computeBounds(const Region& activeTransparentRegion) const;
     Rect computeBounds() const;
 
     sp<IBinder> getHandle();
@@ -202,6 +190,11 @@ public:
      */
     virtual bool isFixedSize() const;
 
+    /*
+     * 是否为 3D 内容
+     */
+    virtual bool isInterleaving() const;
+
 protected:
     /*
      * onDraw - draws the surface.
@@ -226,6 +219,8 @@ public:
      */
     void onLayerDisplayed(const sp<const DisplayDevice>& hw,
             HWComposer::HWCLayerInterface* layer);
+
+    bool shouldPresentNow(const DispSync& dispSync) const;
 
     /*
      * called before composition.
@@ -347,7 +342,8 @@ protected:
 
 private:
     // Interface implementation for SurfaceFlingerConsumer::ContentsChangedListener
-    virtual void onFrameAvailable();
+    virtual void onFrameAvailable(const BufferItem& item);
+    virtual void onFrameReplaced(const BufferItem& item);
     virtual void onSidebandStreamChanged();
 
     void commitTransaction();
@@ -397,6 +393,7 @@ private:
     Rect mCurrentCrop;
     uint32_t mCurrentTransform;
     uint32_t mCurrentScalingMode;
+
     bool mCurrentOpacity;
     bool mRefreshPending;
     bool mFrameLatencyNeeded;
@@ -422,13 +419,12 @@ private:
     // This layer can be a cursor on some displays.
     bool mPotentialCursor;
 
-#ifdef MTK_AOSP_ENHANCEMENT
-private:
-    // calculate tex coord according to display deivce composition phase
-    status_t adjustTexCoord(const sp<const DisplayDevice>& hw, Mesh::VertexArray<vec2> texCoords) const;
+    // Local copy of the queued contents of the incoming BufferQueue
+    mutable Mutex mQueueItemLock;
+    Vector<BufferItem> mQueueItems;
+    bool mInterleaveEnable;
 
-    // check if active buffer S3D
-    bool hasS3DBuffer() const;
+#ifdef MTK_AOSP_ENHANCEMENT
 public:
     virtual bool isDim() const { return false; }
 

@@ -88,5 +88,8 @@ void Description::setColorMatrix(const mat4& mtx) {
     mColorMatrixEnabled = (mtx != identity);
 }
 
+void Description::setInterleaveMode(int interleaveMode) {
+    mInterleaveMode = interleaveMode;
+}
 
 } /* namespace android */

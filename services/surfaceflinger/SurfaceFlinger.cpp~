@@ -169,9 +169,7 @@ SurfaceFlinger::SurfaceFlinger()
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
-        mHasColorMatrix(false),
-        mInterleaveMode(0),
-        mInterleaveScaleRatio(1.0)
+        mHasColorMatrix(false)
 {
     ALOGI("SurfaceFlinger is starting");
 
@@ -1310,9 +1308,6 @@ void SurfaceFlinger::setUpHWComposer() {
 #else
                             if (mDebugDisableHWC || mDebugRegion || mDaltonize || mHasColorMatrix) {
 #endif
-                                cur->setSkip(true);
-                            }
-                            if (layer->isInterleaving()) {
                                 cur->setSkip(true);
                             }
                         }
@@ -2844,7 +2839,7 @@ status_t SurfaceFlinger::dump(int fd, const Vector<String16>& args)
         }
         const bool locked(retry >= 0);
         if (!locked) {
-            result.append(
+            result.appendFormat(
                     "SurfaceFlinger appears to be unresponsive, "
                     "dumping anyways (no locks held)\n");
         }
@@ -2901,8 +2896,8 @@ status_t SurfaceFlinger::dump(int fd, const Vector<String16>& args)
             const bool dumpLocked(retry >= 0);
             if (!dumpLocked) {
                 result.appendFormat(
-                        "SurfaceFlinger appears to be unresponsive, "
-                        "failed to dump\n");
+                        "SurfaceFlinger appears to be unresponsive (%s [%d]), "
+                        "failed to dump\n", strerror(-err), err);
             } else {
                 dumpAllLocked(args, index, result);
                 mDumpLock.unlock();
@@ -3168,14 +3163,6 @@ SurfaceFlinger::getLayerSortedByZForHwcDisplay(int id) {
     return getDisplayDevice(dpy)->getVisibleLayersSortedByZ();
 }
 
-int SurfaceFlinger::getInterleaveMode() const {
-    return mInterleaveMode;
-}
-
-float SurfaceFlinger::getInterleaveScaleRatio() const {
-    return mInterleaveScaleRatio;
-}
-
 bool SurfaceFlinger::startDdmConnection()
 {
     void* libddmconnection_dso =
@@ -3213,7 +3200,7 @@ status_t SurfaceFlinger::onTransact(
             if ((uid != AID_GRAPHICS) &&
                     !PermissionCache::checkPermission(sAccessSurfaceFlinger, pid, uid)) {
                 ALOGE("Permission Denial: "
-                        "can't access SurfaceFlinger (1) pid=%d, uid=%d", pid, uid);
+                        "can't access SurfaceFlinger pid=%d, uid=%d", pid, uid);
                 return PERMISSION_DENIED;
             }
             break;
@@ -3237,14 +3224,14 @@ status_t SurfaceFlinger::onTransact(
     status_t err = BnSurfaceComposer::onTransact(code, data, reply, flags);
     if (err == UNKNOWN_TRANSACTION || err == PERMISSION_DENIED) {
         CHECK_INTERFACE(ISurfaceComposer, data, reply);
-        // if (CC_UNLIKELY(!PermissionCache::checkCallingPermission(sHardwareTest)) {
-        //     IPCThreadState* ipc = IPCThreadState::self();
-        //     const int pid = ipc->getCallingPid();
-        //     const int uid = ipc->getCallingUid();
-        //     ALOGE("Permission Denial: "
-        //             "can't access SurfaceFlinger (2) pid=%d, uid=%d", pid, uid);
-        //     return PERMISSION_DENIED;
-        // }
+        if (CC_UNLIKELY(!PermissionCache::checkCallingPermission(sHardwareTest))) {
+            IPCThreadState* ipc = IPCThreadState::self();
+            const int pid = ipc->getCallingPid();
+            const int uid = ipc->getCallingUid();
+            ALOGE("Permission Denial: "
+                    "can't access SurfaceFlinger pid=%d, uid=%d", pid, uid);
+            return PERMISSION_DENIED;
+        }
         int n;
         switch (code) {
             case 1000: // SHOW_CPU, NOT SUPPORTED ANYMORE
@@ -3339,15 +3326,6 @@ status_t SurfaceFlinger::onTransact(
             case 1016: {
                 n = data.readInt32();
                 mPrimaryDispSync.setRefreshSkipCount(n);
-                return NO_ERROR;
-            }
-            case 2000: {
-                mInterleaveMode = data.readInt32();
-                mInterleaveScaleRatio = data.readFloat();
-                ALOGI("Enable Interleave mode: %d, ScaleRatio: %f",
-                      mInterleaveMode, mInterleaveScaleRatio);
-                invalidateHwcGeometry();
-                repaintEverything();
                 return NO_ERROR;
             }
         }

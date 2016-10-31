@@ -122,7 +122,6 @@ DisplayDevice::DisplayDevice(
 #ifdef MTK_AOSP_ENHANCEMENT
     mHwOrientation = DisplayState::eOrientationDefault;
     mHwcMirrorId = -1;
-    mS3DPhase = eComposing2D;
 #endif
 
     // Name the display.  The name will be replaced shortly if the display
@@ -236,13 +235,6 @@ status_t DisplayDevice::prepareFrame(const HWComposer& hwc) const {
     DisplaySurface::CompositionType compositionType;
     bool haveGles = hwc.hasGlesComposition(mHwcDisplayId);
     bool haveHwc = hwc.hasHwcComposition(mHwcDisplayId);
-
-#ifdef MTK_AOSP_ENHANCEMENT
-    mHas3DLayer = hwc.hasS3DLayer(mHwcDisplayId);
-    if (mHas3DLayer) {
-        mS3DType = hwc.s3dType(mHwcDisplayId);
-    }
-#endif
     if (haveGles && haveHwc) {
         compositionType = DisplaySurface::COMPOSITION_MIXED;
     } else if (haveGles) {
@@ -271,7 +263,19 @@ void DisplayDevice::swapBuffers(HWComposer& hwc) const {
 #ifdef MTK_AOSP_ENHANCEMENT
         // debug line that indicates we are using G3D rendering
         if (CC_UNLIKELY(mFlinger->sPropertiesState.mLineG3D))
+        {
+            const size_t count = mVisibleLayersSortedByZ.size();
+            // draw blue screen if no layer is composed
+            if (count == 0)
+            {
+                RenderEngine& engine(mFlinger->getRenderEngine());
+                engine.setScissor(0, 0, hwc.getWidth(mHwcDisplayId), hwc.getHeight(mHwcDisplayId));
+                engine.clearWithColor(0, 0, 1, 1);
+                engine.disableScissor();
+            }
+
             drawDebugLine();
+        }
 #endif
         EGLBoolean success = eglSwapBuffers(mDisplay, mSurface);
         if (!success) {

@@ -129,7 +129,10 @@ ProgramCache::Key ProgramCache::computeKey(const Description& description) {
     .set(Key::OPACITY_MASK,
             description.mOpaque ? Key::OPACITY_OPAQUE : Key::OPACITY_TRANSLUCENT)
     .set(Key::COLOR_MATRIX_MASK,
-            description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON :  Key::COLOR_MATRIX_OFF);
+            description.mColorMatrixEnabled ? Key::COLOR_MATRIX_ON : Key::COLOR_MATRIX_OFF)
+    .set(Key::INTERLEAVE_MASK,
+            description.mInterleaveMode == 1 ? Key::INTERLEAVE_LR_ROT :
+            description.mInterleaveMode == 2 ? Key::INTERLEAVE_LR : Key::INTERLEAVE_OFF) ;
     return needs;
 }
 
@@ -177,7 +180,21 @@ String8 ProgramCache::generateFragmentShader(const Key& needs) {
     }
     fs << "void main(void) {" << indent;
     if (needs.isTexturing()) {
-        fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+        if (needs.getInterleaveMode() == Key::INTERLEAVE_LR_ROT) {
+            fs << "if (mod(floor(gl_FragCoord.y), 2.0) == 0.0) {" << indent;
+            fs << "    gl_FragColor = texture2D(sampler, vec2(outTexCoords.x * 0.5, outTexCoords.y));" << dedent;
+            fs << "} else {" << indent;
+            fs << "    gl_FragColor = texture2D(sampler, vec2(0.5 + outTexCoords.x * 0.5, outTexCoords.y));" << dedent;
+            fs << "}";
+        } else if (needs.getInterleaveMode() == Key::INTERLEAVE_LR) {
+            fs << "if (mod(floor(gl_FragCoord.y), 2.0) == 0.0) {" << indent;
+            fs << "    gl_FragColor = texture2D(sampler, vec2(outTexCoords.x, outTexCoords.y * 0.5));" << dedent;
+            fs << "} else {" << indent;
+            fs << "    gl_FragColor = texture2D(sampler, vec2(outTexCoords.x, 0.5 + outTexCoords.y * 0.5));" << dedent;
+            fs << "}";
+        } else {
+            fs << "gl_FragColor = texture2D(sampler, outTexCoords);";
+        }
     } else {
         fs << "gl_FragColor = color;";
     }

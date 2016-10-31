@@ -82,6 +82,7 @@ public:
     virtual void dump(String8& result);
 
     // helpers
+    void flush();
     void clearWithColor(float red, float green, float blue, float alpha);
     void fillRegionWithColor(const Region& region, uint32_t height,
             float red, float green, float blue, float alpha);
@@ -112,9 +113,11 @@ public:
     virtual void setupLayerTexturing(const Texture& texture) = 0;
     virtual void setupLayerBlackedOut() = 0;
     virtual void setupFillWithColor(float r, float g, float b, float a) = 0;
+    virtual void setupInterleave(int interleaveMode) = 0;
 
     virtual void disableTexturing() = 0;
     virtual void disableBlending() = 0;
+    virtual void disableInterleave() = 0;
 
     // drawing
     virtual void drawMesh(const Mesh& mesh) = 0;
@@ -153,10 +156,6 @@ public:
     // draw debugging line to the given DisplayDevice
     void drawDebugLine(const sp<const DisplayDevice>& hw,
             uint32_t color = 0xFFFFFFFF, uint32_t steps = 32) const;
-
-    //for S3D feature
-    void adjustViewPortS3D(const sp<const DisplayDevice>& hw);
-    void adjustScissorS3D(const sp<const DisplayDevice>& hw);
 #endif
 };
 

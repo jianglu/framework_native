@@ -46,7 +46,7 @@
 #include <utils/String8.h>
 #include <utils/Trace.h>
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
 #include <gralloc_mtk_defs.h>
 #endif
 
@@ -393,7 +393,7 @@ status_t GLConsumer::updateAndReleaseLocked(const BufferQueue::BufferItem& item)
         return err;
     }
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     // do not create EGLImage if secure buffer
     if (!(mSlots[buf].mGraphicBuffer->getUsage() & GRALLOC_USAGE_SECURE)) {
 #endif
@@ -410,7 +410,7 @@ status_t GLConsumer::updateAndReleaseLocked(const BufferQueue::BufferItem& item)
                     mEglDisplay, EGL_NO_SYNC_KHR);
             return UNKNOWN_ERROR;
         }
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     }
 #endif
 
@@ -470,7 +470,7 @@ status_t GLConsumer::bindTextureImageLocked() {
         ST_LOGW("bindTextureImage: clearing GL error: %#04x", error);
     }
 
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     // do not bind texture if secure buffer
     if (mCurrentTextureImage->graphicBuffer()->getUsage() & GRALLOC_USAGE_SECURE) {
         return doGLFenceWaitLocked();
@@ -527,7 +527,7 @@ status_t GLConsumer::checkAndUpdateEglStateLocked(bool contextCheck) {
         if (mEglDisplay == EGL_NO_DISPLAY) {
             mEglDisplay = dpy;
         }
-        if (mEglContext == EGL_NO_DISPLAY) {
+        if (mEglContext == EGL_NO_CONTEXT) {
             mEglContext = ctx;
         }
     }
@@ -561,7 +561,7 @@ void GLConsumer::setReleaseFence(const sp<Fence>& fence) {
 
 status_t GLConsumer::detachFromContext() {
     ATRACE_CALL();
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     ST_LOGI("detachFromContext");
 #else
     ST_LOGV("detachFromContext");
@@ -610,7 +610,7 @@ status_t GLConsumer::detachFromContext() {
 
 status_t GLConsumer::attachToContext(uint32_t tex) {
     ATRACE_CALL();
-#ifndef MTK_DEFAULT_AOSP
+#ifdef MTK_AOSP_ENHANCEMENT
     ST_LOGI("attachToContext");
 #else
     ST_LOGV("attachToContext");
@@ -1095,6 +1095,7 @@ GLConsumer::EglImage::~EglImage() {
         if (!eglDestroyImageKHR(mEglDisplay, mEglImage)) {
            ALOGE("~EglImage: eglDestroyImageKHR failed");
         }
+        eglTerminate(mEglDisplay);
     }
 }
 
@@ -1109,6 +1110,7 @@ status_t GLConsumer::EglImage::createIfNeeded(EGLDisplay eglDisplay,
         if (!eglDestroyImageKHR(mEglDisplay, mEglImage)) {
            ALOGE("createIfNeeded: eglDestroyImageKHR failed");
         }
+        eglTerminate(mEglDisplay);
         mEglImage = EGL_NO_IMAGE_KHR;
         mEglDisplay = EGL_NO_DISPLAY;
     }
@@ -1159,11 +1161,13 @@ EGLImageKHR GLConsumer::EglImage::createImage(EGLDisplay dpy,
         // removes this restriction if there is hardware that can support it.
         attrs[2] = EGL_NONE;
     }
+    eglInitialize(dpy, 0, 0);
     EGLImageKHR image = eglCreateImageKHR(dpy, EGL_NO_CONTEXT,
             EGL_NATIVE_BUFFER_ANDROID, cbuf, attrs);
     if (image == EGL_NO_IMAGE_KHR) {
         EGLint error = eglGetError();
         ALOGE("error creating EGLImage: %#x", error);
+        eglTerminate(dpy);
     }
     return image;
 }

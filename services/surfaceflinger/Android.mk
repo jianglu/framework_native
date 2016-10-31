@@ -83,6 +83,12 @@ else
     LOCAL_CFLAGS += -DPRESENT_TIME_OFFSET_FROM_VSYNC_NS=0
 endif
 
+ifneq ($(MAX_VIRTUAL_DISPLAY_DIMENSION),)
+    LOCAL_CFLAGS += -DMAX_VIRTUAL_DISPLAY_DIMENSION=$(MAX_VIRTUAL_DISPLAY_DIMENSION)
+else
+    LOCAL_CFLAGS += -DMAX_VIRTUAL_DISPLAY_DIMENSION=0
+endif
+
 LOCAL_CFLAGS += -fvisibility=hidden -Werror=format
 LOCAL_CFLAGS += -std=c++11
 
@@ -103,7 +109,6 @@ LOCAL_SHARED_LIBRARIES := \
 # --- MediaTek ---------------------------------------------------------------
 ifneq (, $(findstring MTK_AOSP_ENHANCEMENT, $(COMMON_GLOBAL_CPPFLAGS)))
 	LOCAL_SRC_FILES += \
-		mediatek/Layer.cpp \
 		mediatek/DisplayDevice.cpp \
 		mediatek/SurfaceFlinger.cpp \
 		mediatek/DisplayHardware/HWComposer.cpp \
@@ -132,8 +137,7 @@ LOCAL_REQUIRED_MODULES += \
 LOCAL_SHARED_LIBRARIES += \
 	libskia \
 	libui_ext \
-	libselinux \
-	libgralloc_extra
+	libselinux
 
 LOCAL_C_INCLUDES += \
 	$(TOP)/$(MTK_ROOT)/hardware/include \
@@ -151,8 +155,6 @@ endif
 
 LOCAL_MODULE:= libsurfaceflinger
 
--include miui/frameworks/base/native/services/surfaceflinger/MiuiExtension.mk
-
 include $(BUILD_SHARED_LIBRARY)
 
 ###############################################################
@@ -160,6 +162,7 @@ include $(BUILD_SHARED_LIBRARY)
 include $(CLEAR_VARS)
 
 LOCAL_CFLAGS:= -DLOG_TAG=\"SurfaceFlinger\"
+LOCAL_CPPFLAGS:= -std=c++11
 
 LOCAL_SRC_FILES:= \
 	main_surfaceflinger.cpp
@@ -169,7 +172,9 @@ LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	liblog \
 	libbinder \
-	libutils
+	libutils \
+	libdl
+
 
 # --- MediaTek ---------------------------------------------------------------
 LOCAL_C_INCLUDES := \

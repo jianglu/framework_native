@@ -43,7 +43,7 @@ namespace android {
 
 class ComposerState;
 class DisplayState;
-class DisplayInfo;
+struct DisplayInfo;
 class DisplayStatInfo;
 class IDisplayEventConnection;
 class IMemoryHeap;

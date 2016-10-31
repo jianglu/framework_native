@@ -39,7 +39,10 @@
 #include <ui/GraphicBuffer.h>
 #include <ui/PixelFormat.h>
 
+#include <gui/BufferItem.h>
 #include <gui/Surface.h>
+#include <gui/BufferQueueProducer.h>
+#include <binder/IPCThreadState.h>
 
 #include "clz.h"
 #include "Colorizer.h"
@@ -54,14 +57,6 @@
 
 #ifdef MTK_AOSP_ENHANCEMENT
 #include <cutils/xlog.h>
-#endif
-
-#ifdef HAS_BLUR
-#include "MiuiBlur.h"
-#endif
-
-#ifdef HAS_HANDY_MODE
-#include "HandyModeForSF.h"
 #endif
 
 #define DEBUG_RESIZE    0
@@ -97,13 +92,9 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mProtectedByApp(false),
         mHasSurface(false),
         mClientRef(client),
-        mPotentialCursor(false)
+        mPotentialCursor(false),
+        mInterleaveEnable(false)
 {
-#ifdef HAS_BLUR
-    blurSurface = NULL;
-    coveredByBlur = false;
-    mQueuedFramesBackForBlur = 0;
-#endif
     mCurrentCrop.makeInvalid();
     mFlinger->getRenderEngine().genTextures(1, &mTextureName);
     mTexture.init(Texture::TEXTURE_EXTERNAL, mTextureName);
@@ -118,6 +109,9 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mPremultipliedAlpha = false;
 
     mName = name;
+    if (mName == "SurfaceView") {
+        mInterleaveEnable = true;
+    }
 
     mCurrentState.active.w = w;
     mCurrentState.active.h = h;
@@ -176,9 +170,6 @@ Layer::~Layer() {
         }
     }
 #endif
-#ifdef HAS_BLUR
-    if (blurSurface != NULL) delete blurSurface;
-#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -193,12 +184,24 @@ void Layer::onLayerDisplayed(const sp<const DisplayDevice>& /* hw */,
     }
 }
 
-void Layer::onFrameAvailable() {
+void Layer::onFrameAvailable(const BufferItem& item) {
+    // Add this buffer from our internal queue tracker
+    { // Autolock scope
+        Mutex::Autolock lock(mQueueItemLock);
+        mQueueItems.push_back(item);
+    }
+
     android_atomic_inc(&mQueuedFrames);
-#ifdef HAS_BLUR
-    mQueuedFramesBackForBlur = mQueuedFrames;
-#endif
     mFlinger->signalLayerUpdate();
+}
+
+void Layer::onFrameReplaced(const BufferItem& item) {
+    Mutex::Autolock lock(mQueueItemLock);
+    if (mQueueItems.empty()) {
+        ALOGE("Can't replace a frame on an empty queue");
+        return;
+    }
+    mQueueItems.editItemAt(0) = item;
 }
 
 void Layer::onSidebandStreamChanged() {
@@ -315,12 +318,17 @@ static Rect reduce(const Rect& win, const Region& exclude) {
 
 Rect Layer::computeBounds() const {
     const Layer::State& s(getDrawingState());
+    return computeBounds(s.activeTransparentRegion);
+}
+
+Rect Layer::computeBounds(const Region& activeTransparentRegion) const {
+    const Layer::State& s(getDrawingState());
     Rect win(s.active.w, s.active.h);
     if (!s.active.crop.isEmpty()) {
         win.intersect(s.active.crop, &win);
     }
     // subtract the transparent region and snap to the bounds
-    return reduce(win, s.activeTransparentRegion);
+    return reduce(win, activeTransparentRegion);
 }
 
 FloatRect Layer::computeCrop(const sp<const DisplayDevice>& hw) const {
@@ -348,8 +356,12 @@ FloatRect Layer::computeCrop(const sp<const DisplayDevice>& hw) const {
     activeCrop.intersect(hw->getViewport(), &activeCrop);
     activeCrop = s.transform.inverse().transform(activeCrop);
 
-    // paranoia: make sure the window-crop is constrained in the
-    // window's bounds
+    // This needs to be here as transform.transform(Rect) computes the
+    // transformed rect and then takes the bounding box of the result before
+    // returning. This means
+    // transform.inverse().transform(transform.transform(Rect)) != Rect
+    // in which case we need to make sure the final rect is clipped to the
+    // display bounds.
     activeCrop.intersect(Rect(s.active.w, s.active.h), &activeCrop);
 
     // subtract the transparent region and snap to the bounds
@@ -442,15 +454,35 @@ void Layer::setGeometry(
 
     // apply the layer's transform, followed by the display's global transform
     // here we're guaranteed that the layer's transform preserves rects
-    Rect frame(s.transform.transform(computeBounds()));
+    Region activeTransparentRegion(s.activeTransparentRegion);
+    if (!s.active.crop.isEmpty()) {
+        Rect activeCrop(s.active.crop);
+        activeCrop = s.transform.transform(activeCrop);
+        activeCrop.intersect(hw->getViewport(), &activeCrop);
+        activeCrop = s.transform.inverse().transform(activeCrop);
+        // This needs to be here as transform.transform(Rect) computes the
+        // transformed rect and then takes the bounding box of the result before
+        // returning. This means
+        // transform.inverse().transform(transform.transform(Rect)) != Rect
+        // in which case we need to make sure the final rect is clipped to the
+        // display bounds.
+        activeCrop.intersect(Rect(s.active.w, s.active.h), &activeCrop);
+        // mark regions outside the crop as transparent
+        activeTransparentRegion.orSelf(Rect(0, 0, s.active.w, activeCrop.top));
+        activeTransparentRegion.orSelf(Rect(0, activeCrop.bottom,
+                s.active.w, s.active.h));
+        activeTransparentRegion.orSelf(Rect(0, activeCrop.top,
+                activeCrop.left, activeCrop.bottom));
+        activeTransparentRegion.orSelf(Rect(activeCrop.right, activeCrop.top,
+                s.active.w, activeCrop.bottom));
+    }
+    Rect frame(s.transform.transform(computeBounds(activeTransparentRegion)));
     frame.intersect(hw->getViewport(), &frame);
     const Transform& tr(hw->getTransform());
-#ifdef MTK_AOSP_ENHANCEMENT
-    layer.setBufferCrop(mSurfaceFlingerConsumer->getCurrentCrop());
-#endif
     layer.setFrame(tr.transform(frame));
     layer.setCrop(computeCrop(hw));
     layer.setPlaneAlpha(s.alpha);
+
     /*
      * Transformations are applied in this order:
      * 1) buffer orientation/flip/mirror
@@ -569,46 +601,16 @@ Rect Layer::getPosition(
 // ---------------------------------------------------------------------------
 
 void Layer::draw(const sp<const DisplayDevice>& hw, const Region& clip) const {
-#ifdef HAS_HANDY_MODE
-    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
-    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
-#endif
-#ifdef HAS_BLUR
-    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
-#endif
     onDraw(hw, clip, false);
-#ifdef HAS_HANDY_MODE
-    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
-#endif
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw,
         bool useIdentityTransform) const {
-#ifdef HAS_HANDY_MODE
-    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
-    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
-#endif
-#ifdef HAS_BLUR
-    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
-#endif
     onDraw(hw, Region(hw->bounds()), useIdentityTransform);
-#ifdef HAS_HANDY_MODE
-    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
-#endif
 }
 
 void Layer::draw(const sp<const DisplayDevice>& hw) const {
-#ifdef HAS_HANDY_MODE
-    const bool isHandyMode = HandyModeForSF::getInstance()->isInHandyMode();
-    if (isHandyMode) HandyModeForSF::getInstance()->onPreLayerDraw(this);
-#endif
-#ifdef HAS_BLUR
-    if (blurSurface != NULL) blurSurface->draw(hw, mFlinger);
-#endif
     onDraw(hw, Region(hw->bounds()), false);
-#ifdef HAS_HANDY_MODE
-    if (isHandyMode) HandyModeForSF::getInstance()->onPostLayerDraw(this);
-#endif
 }
 
 void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
@@ -665,17 +667,8 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 
     if (!blackOutLayer) {
         // TODO: we could be more subtle with isFixedSize()
-        bool isHandyScaleMode = false;
-#ifdef HAS_HANDY_MODE
-        isHandyScaleMode = HandyModeForSF::getInstance()->isInScaleMode();
-#endif
-        //const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
+        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize();
 
-#ifdef MTK_AOSP_ENHANCEMENT
-	const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || hw->hasS3DLayer() || isHandyScaleMode;
-#else
-        const bool useFiltering = getFiltering() || needsFiltering(hw) || isFixedSize() || isHandyScaleMode;
-#endif
         // Query the texture matrix given our current filtering mode.
         float textureMatrix[16];
         mSurfaceFlingerConsumer->setFilteringEnabled(useFiltering);
@@ -725,8 +718,21 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
 #endif
         engine.setupLayerBlackedOut();
     }
+
+    if (mInterleaveEnable && mFlinger->getInterleaveMode() != 0) {
+        if (mCurrentTransform == NATIVE_WINDOW_TRANSFORM_ROT_90
+                || mCurrentTransform == NATIVE_WINDOW_TRANSFORM_ROT_270) {
+            engine.setupInterleave(2);
+        } else {
+            engine.setupInterleave(1);
+        }
+    } else {
+        engine.setupInterleave(0);
+    }
+
     drawWithOpenGL(hw, clip, useIdentityTransform);
     engine.disableTexturing();
+    engine.disableInterleave();
 }
 
 
@@ -780,12 +786,6 @@ void Layer::drawWithOpenGL(const sp<const DisplayDevice>& hw,
     texCoords[1] = vec2(left, 1.0f - bottom);
     texCoords[2] = vec2(right, 1.0f - bottom);
     texCoords[3] = vec2(right, 1.0f - top);
-
-#ifdef MTK_AOSP_ENHANCEMENT
-    if (hw->hasS3DLayer()) {
-        adjustTexCoord(hw, texCoords);
-    }
-#endif
 
     RenderEngine& engine(mFlinger->getRenderEngine());
     engine.setupLayerBlending(mPremultipliedAlpha, isOpaque(s), s.alpha);
@@ -841,10 +841,18 @@ void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh,
         bool useIdentityTransform) const
 {
     const Layer::State& s(getDrawingState());
-    const Transform tr(useIdentityTransform ?
+    Transform tr(useIdentityTransform ?
             hw->getTransform() : hw->getTransform() * s.transform);
     const uint32_t hw_h = hw->getHeight();
     Rect win(s.active.w, s.active.h);
+
+    if (mInterleaveEnable) {
+        static Transform tr2;
+        float scaleRatio = mFlinger->getInterleaveScaleRatio();
+        tr2.scaleV(scaleRatio, s.active.h);
+        tr = tr * tr2;
+    }
+
     if (!s.active.crop.isEmpty()) {
         win.intersect(s.active.crop, &win);
     }
@@ -859,12 +867,6 @@ void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh,
     for (size_t i=0 ; i<4 ; i++) {
         position[i].y = hw_h - position[i].y;
     }
-
-#ifdef HAS_HANDY_MODE
-    if (HandyModeForSF::getInstance()->isInHandyMode()) {
-        HandyModeForSF::getInstance()->onPostLayerComputeGeometry(this, mesh);
-    }
-#endif
 }
 
 bool Layer::isOpaque(const Layer::State& s) const
@@ -889,6 +891,10 @@ bool Layer::isProtected() const
 
 bool Layer::isFixedSize() const {
     return mCurrentScalingMode != NATIVE_WINDOW_SCALING_MODE_FREEZE;
+}
+
+bool Layer::isInterleaving() const {
+    return mInterleaveEnable;
 }
 
 bool Layer::isCropped() const {
@@ -1015,12 +1021,6 @@ uint32_t Layer::doTransaction(uint32_t flags) {
                 (type >= Transform::SCALE));
     }
 
-#ifdef HAS_BLUR
-    if ((c.flags & layer_state_t::eLayerBlur) != (s.flags & layer_state_t::eLayerBlur)) {
-        setupBlurSurface((c.flags & layer_state_t::eLayerBlur) != 0);
-    }
-#endif
-
     // Commit the transaction
     commitTransaction();
     return flags;
@@ -1038,9 +1038,6 @@ void Layer::commitTransaction() {
         XLOGD("%s", result.string());
     }
 #endif
-#ifdef HAS_BLUR
-    if (Blur::hasBlurLayer()) Blur::invalidateBlur(this);
-#endif
 }
 
 uint32_t Layer::getTransactionFlags(uint32_t flags) {
@@ -1050,29 +1047,6 @@ uint32_t Layer::getTransactionFlags(uint32_t flags) {
 uint32_t Layer::setTransactionFlags(uint32_t flags) {
     return android_atomic_or(flags, &mTransactionFlags);
 }
-
-#ifdef HAS_BLUR
-void Layer::setupBlurSurface(bool enable) {
-    if (enable) {
-        if (blurSurface == NULL) {
-            const Layer::State& c(getCurrentState());
-            blurSurface = new BlurSurface(this, c.active.w, c.active.h);
-        }
-        const int64_t now = nanoseconds_to_milliseconds(systemTime(SYSTEM_TIME_MONOTONIC));
-        blurSurface->show(now);
-    } else if (blurSurface != NULL) {
-        const int64_t now = nanoseconds_to_milliseconds(systemTime(SYSTEM_TIME_MONOTONIC));
-        blurSurface->hide(now);
-    }
-}
-
-void Layer::destroyBlurSurface() {
-    if (blurSurface != NULL) {
-        delete blurSurface;
-        blurSurface = NULL;
-    }
-}
-#endif
 
 bool Layer::setPosition(float x, float y) {
     if (mCurrentState.transform.tx() == x && mCurrentState.transform.ty() == y)
@@ -1148,6 +1122,14 @@ bool Layer::setLayerStack(uint32_t layerStack) {
 // ----------------------------------------------------------------------------
 // pageflip handling...
 // ----------------------------------------------------------------------------
+
+bool Layer::shouldPresentNow(const DispSync& dispSync) const {
+    Mutex::Autolock lock(mQueueItemLock);
+    nsecs_t expectedPresent =
+            mSurfaceFlingerConsumer->computeExpectedPresent(dispSync);
+    return mQueueItems.empty() ?
+            false : mQueueItems[0].mTimestamp < expectedPresent;
+}
 
 bool Layer::onPreComposition() {
     mRefreshPending = false;
@@ -1344,6 +1326,12 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
             return outDirtyRegion;
         }
 
+        // Remove this buffer from our internal queue tracker
+        { // Autolock scope
+            Mutex::Autolock lock(mQueueItemLock);
+            mQueueItems.removeAt(0);
+        }
+
         // Decrement the queued-frames count.  Signal another event if we
         // have more frames pending.
         if (android_atomic_dec(&mQueuedFrames) > 1) {
@@ -1374,6 +1362,7 @@ Region Layer::latchBuffer(bool& recomputeVisibleRegions)
         Rect crop(mSurfaceFlingerConsumer->getCurrentCrop());
         const uint32_t transform(mSurfaceFlingerConsumer->getCurrentTransform());
         const uint32_t scalingMode(mSurfaceFlingerConsumer->getCurrentScalingMode());
+
         if ((crop != mCurrentCrop) ||
             (transform != mCurrentTransform) ||
             (scalingMode != mCurrentScalingMode))

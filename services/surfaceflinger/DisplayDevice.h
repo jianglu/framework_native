@@ -46,7 +46,7 @@ struct ANativeWindow;
 
 namespace android {
 
-class DisplayInfo;
+struct DisplayInfo;
 class DisplaySurface;
 class IGraphicBufferProducer;
 class Layer;
@@ -251,23 +251,7 @@ private:
 
     // used to check if display has changed
     mutable bool mMustRecompose;
-
-	// used to check layer list has 3D info
-    mutable bool mHas3DLayer;
-    mutable int mS3DType;
-
 public:
-
-    // enum for S3D rendering control
-    enum {
-        eComposing2D           = 0x02,
-        eComposingS3DSBSLeft   = 0x0A,    //left or top S3D buffer
-        eComposingS3DSBSRight  = 0x0B,    //right or bottom S3D buffer
-        eComposingS3DTABTop    = 0x0C,    //left or top S3D buffer
-        eComposingS3DTABBottom = 0x0D,    //left or top S3D buffer
-    };	
-    mutable int32_t mS3DPhase;
-
     // correct geometry by device hw orientation
     void correctSizeByHwOrientation(uint32_t &w, uint32_t &h) const;
     void correctRotationByHwOrientation(Transform::orientation_flags &rotation) const;
@@ -280,9 +264,6 @@ public:
 
     // mustRecompose is called to check if need to recompose
     bool mustRecompose() const;
-    
-    bool hasS3DLayer() const { return mHas3DLayer; }
-    int s3dType() const { return mS3DType; }
 #endif // MTK_AOSP_ENHANCEMENT
 };
 

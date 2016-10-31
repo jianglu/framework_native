@@ -175,6 +175,10 @@ void GLES20RenderEngine::setupLayerBlackedOut() {
     mState.setTexture(texture);
 }
 
+void GLES20RenderEngine::setupInterleave(int interleaveMode) {
+    mState.setInterleaveMode(interleaveMode);
+}
+
 void GLES20RenderEngine::disableTexturing() {
     mState.disableTexture();
 }
@@ -183,6 +187,9 @@ void GLES20RenderEngine::disableBlending() {
     glDisable(GL_BLEND);
 }
 
+void GLES20RenderEngine::disableInterleave() {
+    mState.setInterleaveMode(0);
+}
 
 void GLES20RenderEngine::bindImageAsFramebuffer(EGLImageKHR image,
         uint32_t* texName, uint32_t* fbName, uint32_t* status) {

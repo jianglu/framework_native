@@ -184,7 +184,6 @@ public:
         virtual void onDisplayed() = 0;
 #ifdef MTK_AOSP_ENHANCEMENT
         virtual void setDim(bool dim) = 0;
-        virtual void setBufferCrop(const Rect& crop) = 0;
 #endif
     };
 
@@ -209,7 +208,7 @@ public:
      * This behaves more or less like a forward iterator.
      */
     class LayerListIterator {
-        friend struct HWComposer;
+        friend class HWComposer;
         HWCLayer* const mLayerList;
         size_t mIndex;
 
@@ -365,8 +364,6 @@ private:
         uint8_t subtype;
         int32_t mirrorId;
         uint32_t orientation;
-        bool hasS3DLayer;
-        int s3dType;
 #endif
     };
 
@@ -406,9 +403,6 @@ public:
 
     // platform features
     hwc_feature_t mFeaturesState;
-
-    bool hasS3DLayer(int32_t id) const;
-    int s3dType(int32_t id) const;
 #endif
 };
 

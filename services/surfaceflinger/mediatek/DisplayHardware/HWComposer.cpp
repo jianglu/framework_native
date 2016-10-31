@@ -103,20 +103,5 @@ bool HWComposer::mustRecompose(size_t dpy) const {
     return mFlinger->mustRecompose(dpy);
 }
 
-bool HWComposer::hasS3DLayer(int32_t id) const {
-    if (!mHwc || uint32_t(id) > 31 || !mAllocatedDisplayIDs.hasBit(id)) {
-        return false;
-    } else {
-        return mDisplayData[id].hasS3DLayer;
-    }
-}
-
-int HWComposer::s3dType(int32_t id) const {
-    if (!mHwc || uint32_t(id) > 31 || !mAllocatedDisplayIDs.hasBit(id)) {
-        return false;
-    } else {
-        return mDisplayData[id].s3dType;
-    }
-}
 // ---------------------------------------------------------------------------
 }; // namespace android

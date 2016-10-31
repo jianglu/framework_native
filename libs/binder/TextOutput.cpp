@@ -122,7 +122,7 @@ TextOutput& operator<<(TextOutput& to, double val)
 TextOutput& operator<<(TextOutput& to, const void* val)
 {
     char buf[32];
-    sprintf(buf, "%p", val);
+    snprintf(buf, sizeof(buf), "%p", val);
     to.print(buf, strlen(buf));
     return to;
 }

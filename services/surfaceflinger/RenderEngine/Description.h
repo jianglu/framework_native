@@ -54,6 +54,11 @@ class Description {
     bool mColorMatrixEnabled;
     mat4 mColorMatrix;
 
+    // 0 - INTERLEAVE_OFF
+    // 1 - INTERLEAVE_LR_ROT
+    // 2 - INTERLEAVE_LR
+    int mInterleaveMode;
+
 public:
     Description();
     ~Description();
@@ -66,6 +71,7 @@ public:
     void setColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
     void setProjectionMatrix(const mat4& mtx);
     void setColorMatrix(const mat4& mtx);
+    void setInterleaveMode(int interleaveMode);
 
 private:
     bool mUniformsDirty;

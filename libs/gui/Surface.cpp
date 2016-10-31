@@ -99,6 +99,9 @@ void Surface::setSidebandStream(const sp<NativeHandle>& stream) {
 }
 
 void Surface::allocateBuffers() {
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::allocateBuffers(this=%p)", this);
+#endif
     uint32_t reqWidth = mReqWidth ? mReqWidth : mUserWidth;
     uint32_t reqHeight = mReqHeight ? mReqHeight : mUserHeight;
     mGraphicBufferProducer->allocateBuffers(mSwapIntervalZero, mReqWidth,
@@ -561,7 +564,11 @@ int Surface::dispatchSetSidebandStream(va_list args) {
 
 int Surface::connect(int api) {
     ATRACE_CALL();
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::connect(this=%p,api=%d)", this, api);
+#else
     ALOGV("Surface::connect");
+#endif
     static sp<IProducerListener> listener = new DummyProducerListener();
     Mutex::Autolock lock(mMutex);
     IGraphicBufferProducer::QueueBufferOutput output;
@@ -588,7 +595,11 @@ int Surface::connect(int api) {
 
 int Surface::disconnect(int api) {
     ATRACE_CALL();
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::disconnect(this=%p,api=%d)", this, api);
+#else
     ALOGV("Surface::disconnect");
+#endif
     Mutex::Autolock lock(mMutex);
     freeAllBuffers();
     int err = mGraphicBufferProducer->disconnect(api);
@@ -639,7 +650,11 @@ int Surface::setCrop(Rect const* rect)
 int Surface::setBufferCount(int bufferCount)
 {
     ATRACE_CALL();
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::setBufferCount(this=%p,bufferCount=%d)", this, bufferCount);
+#else
     ALOGV("Surface::setBufferCount");
+#endif
     Mutex::Autolock lock(mMutex);
 
     status_t err = mGraphicBufferProducer->setBufferCount(bufferCount);
@@ -656,7 +671,11 @@ int Surface::setBufferCount(int bufferCount)
 int Surface::setBuffersDimensions(int w, int h)
 {
     ATRACE_CALL();
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::setBuffersDimensions(this=%p,w=%d,h=%d)", this, w, h);
+#else
     ALOGV("Surface::setBuffersDimensions");
+#endif
 
     if (w<0 || h<0)
         return BAD_VALUE;
@@ -673,7 +692,11 @@ int Surface::setBuffersDimensions(int w, int h)
 int Surface::setBuffersUserDimensions(int w, int h)
 {
     ATRACE_CALL();
+#ifdef MTK_AOSP_ENHANCEMENT
+    ALOGD("Surface::setBuffersUserDimensions(this=%p,w=%d,h=%d)", this, w, h);
+#else
     ALOGV("Surface::setBuffersUserDimensions");
+#endif
 
     if (w<0 || h<0)
         return BAD_VALUE;

@@ -62,8 +62,10 @@ protected:
     virtual void setupLayerTexturing(const Texture& texture);
     virtual void setupLayerBlackedOut();
     virtual void setupFillWithColor(float r, float g, float b, float a) ;
+    virtual void setupInterleave(int interleaveMode) {}
     virtual void disableTexturing();
     virtual void disableBlending();
+    virtual void disableInterleave() {}
 
     virtual void drawMesh(const Mesh& mesh);
 
